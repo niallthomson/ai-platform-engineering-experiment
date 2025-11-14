@@ -40,6 +40,6 @@ Access MCP servers via port-forward:
 {{- range .Values.mcpServers }}
 {{- $mcpServer := . }}
 {{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
-  kubectl port-forward --namespace {{ $.Release.Namespace }} svc/{{ include "platform-ai.mcpServerFullname" $ctx }} 8080:80  ({{ $mcpServer.name }})
+  kubectl port-forward --namespace {{ $.Release.Namespace }} svc/{{ include "platform-ai.mcpServerFullname" $ctx }} 8080:80  ({{ $mcpServer.id }})
 {{- end }}
 {{- end }}

@@ -11,7 +11,7 @@ from strands.session import SessionManager
 from strands.session.file_session_manager import FileSessionManager
 from a2a.types import AgentSkill
 from .config import createConfig
-from .agent_tool import createAgentTool
+from .agent_registry import A2AAgentRegistry
 from .model_factory import create_model
 from .security_factory import configure_security
 import uvicorn
@@ -52,9 +52,11 @@ async def run(loop):
         mcp_client.start()
         all_tools.extend(mcp_client.list_tools_sync())
 
-    for agent_url in config.a2a.peer_agents:
-        agent_tool = await createAgentTool(agent_url=agent_url)
-        all_tools.extend([agent_tool])
+    registry = A2AAgentRegistry(
+        agent_urls=config.a2a.peer_agents,
+        refresh_interval=60
+    )
+    await registry.start()
 
     def agent_generator(context: RequestContext | None) -> Agent:
         session_manager: SessionManager | None = None
@@ -63,11 +65,13 @@ async def run(loop):
                 context_id = context.context_id
                 session_manager = FileSessionManager(session_id=context_id)
 
+        agent_tools = all_tools + registry.get_tools()
+
         return Agent(
             name=config.name,
             description=config.description,
             model=model,
-            tools=all_tools,
+            tools=agent_tools,
             system_prompt=config.system_prompt,
             callback_handler=None,
             session_manager=session_manager,
@@ -123,6 +127,10 @@ async def run(loop):
     @app.get("/ping")
     async def health_check():
         return {"status": "healthy"}
+
+    @app.get("/agents/status")
+    async def agents_status():
+        return registry.get_status()
 
     app.mount("/", fastapi_app)
 
