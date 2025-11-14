@@ -34,6 +34,9 @@ FROM python:3.13-slim as app
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
+RUN useradd -m -u 1000 appuser
+
 # Project got copied to here
 WORKDIR /app
 
@@ -41,7 +44,10 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Get the project from the uv layer
-COPY --from=uv  /app/.venv .venv
+COPY --from=uv --chown=appuser:appuser /app/.venv .venv
+
+# Switch to non-root user
+USER appuser
 
 # Expose ports for MCP (8080), A2A (9000), and FastAPI (3000)
 EXPOSE 8080 9000 3000

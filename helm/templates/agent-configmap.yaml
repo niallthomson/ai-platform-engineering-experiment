@@ -1,0 +1,68 @@
+{{- range .Values.agents }}
+{{- $agent := . }}
+{{- $ctx := dict "root" $ "agent" $agent }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "platform-ai.agentFullname" $ctx }}
+  labels:
+    {{- include "platform-ai.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $agent.id }}
+data:
+  AGENT_NAME: {{ $agent.name | quote }}
+  AGENT_DESCRIPTION: {{ $agent.description | quote }}
+  AGENT_system_prompt: {{ $agent.system_prompt | quote }}
+  AGENT_A2A__SERVER__host: 0.0.0.0
+  {{- if $agent.mcpServers }}
+  AGENT_mcp_servers: {{ include "platform-ai.mcpServersToPython" (dict "servers" $agent.mcpServers "root" $) | quote }}
+  {{- end }}
+  {{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt" "mcpServers" "a2a") }}
+  {{- if $config.model }}
+  AGENT_model__provider: {{ $config.model.provider | quote }}
+  AGENT_model__model_id: {{ $config.model.model_id | quote }}
+  {{- if eq $config.model.provider "bedrock" }}
+  {{- if $config.model.bedrock }}
+  AGENT_model__bedrock__region: {{ $config.model.bedrock.region | quote }}
+  {{- end }}
+  {{- else if eq $config.model.provider "openai" }}
+  {{- if $config.model.openai }}
+  {{- if $config.model.openai.base_url }}
+  AGENT_model__openai__base_url: {{ $config.model.openai.base_url | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- if $agent.a2a }}
+  AGENT_A2A__SERVER__url: {{ $agent.a2a.serverUrl | default (printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $ctx) $.Release.Namespace) | quote }}
+  {{- $peerUrls := list }}
+  {{- if $agent.a2a.peerAgents }}
+  {{- range $agent.a2a.peerAgents }}
+  {{- $peerCtx := dict "root" $ "agent" (dict "id" .) }}
+  {{- $peerUrls = append $peerUrls (printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $peerCtx) $.Release.Namespace) }}
+  {{- end }}
+  {{- end }}
+  {{- if $agent.a2a.peerAgentUrls }}
+  {{- $peerUrls = concat $peerUrls $agent.a2a.peerAgentUrls }}
+  {{- end }}
+  {{- if $peerUrls }}
+  AGENT_A2A__PEER_AGENTS: {{ toJson $peerUrls | quote }}
+  {{- end }}
+  {{- if $agent.a2a.security }}
+  AGENT_A2A__SECURITY__mode: {{ $agent.a2a.security.mode | quote }}
+  {{- if eq $agent.a2a.security.mode "bearer" }}
+  {{- if $agent.a2a.security.bearer }}
+  AGENT_A2A__SECURITY__bearer__token: {{ $agent.a2a.security.bearer.token | quote }}
+  {{- end }}
+  {{- else if eq $agent.a2a.security.mode "oauth" }}
+  {{- if $agent.a2a.security.oauth }}
+  AGENT_A2A__SECURITY__oauth__jwks_url: {{ $agent.a2a.security.oauth.jwks_url | quote }}
+  AGENT_A2A__SECURITY__oauth__audience: {{ $agent.a2a.security.oauth.audience | quote }}
+  AGENT_A2A__SECURITY__oauth__issuer: {{ $agent.a2a.security.oauth.issuer | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- else }}
+  AGENT_A2A__SERVER__url: {{ printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $ctx) $.Release.Namespace | quote }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,91 @@
+{{- range .Values.agents }}
+{{- $agent := . }}
+{{- $ctx := dict "root" $ "agent" $agent }}
+{{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "platform-ai.agentFullname" $ctx }}
+  labels:
+    {{- include "platform-ai.labels" $ | nindent 4 }}
+    app.kubernetes.io/type: agent
+    app.kubernetes.io/component: {{ $agent.id }}
+spec:
+  {{- if not $config.autoscaling.enabled }}
+  replicas: {{ $config.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "platform-ai.agentSelectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      {{- with $config.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "platform-ai.labels" $ | nindent 8 }}
+        app.kubernetes.io/type: agent
+        app.kubernetes.io/component: {{ $agent.id }}
+        {{- with $config.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $config.serviceAccount.create }}
+      serviceAccountName: {{ include "platform-ai.agentFullname" $ctx }}
+      {{- else }}
+      serviceAccountName: {{ $config.serviceAccount.name | default "default" }}
+      {{- end }}
+      {{- with $config.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $agent.id }}
+          {{- with $config.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $config.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "platform-ai.agentFullname" $ctx }}
+            {{- if $config.secret.create }}
+            - secretRef:
+                name: {{ $config.secret.name | default (include "platform-ai.agentFullname" $ctx) }}
+            {{- end }}
+          {{- with $config.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $config.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $config.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $config.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $config.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $config.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

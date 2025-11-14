@@ -12,15 +12,22 @@ import uvicorn
 from a2a.server.apps import A2AFastAPIApplication, A2AStarletteApplication
 from a2a.server.events import QueueManager
 from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore, PushNotificationConfigStore, PushNotificationSender, TaskStore
+from a2a.server.tasks import (
+    InMemoryTaskStore,
+    PushNotificationConfigStore,
+    PushNotificationSender,
+    TaskStore,
+)
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, SecurityScheme
 from fastapi import FastAPI
 from starlette.applications import Starlette
 from .executor import StrandsA2AExecutor
+from a2a.server.agent_execution import RequestContext
 
 from strands.agent.agent import Agent as SAAgent
 
 logger = logging.getLogger(__name__)
+
 
 # Needed due to https://github.com/strands-agents/sdk-python/issues/990
 class A2AServer:
@@ -28,7 +35,7 @@ class A2AServer:
 
     def __init__(
         self,
-        agent_generator: Callable[[str | None], SAAgent],
+        agent_generator: Callable[[RequestContext | None], SAAgent],
         *,
         # AgentCard
         host: str = "127.0.0.1",
@@ -71,12 +78,12 @@ class A2AServer:
         self.host = host
         self.port = port
         self.version = version
-        
+
         self.strands_agent = agent_generator(None)
-        
+
         self.name = self.strands_agent.name
         self.description = self.strands_agent.description
-        
+
         self.security_schemes = security_schemes
 
         if http_url:
@@ -101,7 +108,9 @@ class A2AServer:
             push_sender=push_sender,
         )
         self._agent_skills = skills
-        logger.info("Strands' integration with A2A is experimental. Be aware of frequent breaking changes.")
+        logger.info(
+            "Strands' integration with A2A is experimental. Be aware of frequent breaking changes."
+        )
 
     def _parse_public_url(self, url: str) -> tuple[str, str]:
         """Parse the public URL into base URL and mount path components.
@@ -163,14 +172,23 @@ class A2AServer:
             list[AgentSkill]: A list of skills this agent provides.
         """
         return [
-            AgentSkill(name=config["name"], id=config["name"], description=config["description"], tags=[])
+            AgentSkill(
+                name=config["name"],
+                id=config["name"],
+                description=config["description"],
+                tags=[],
+            )
             for config in self.strands_agent.tool_registry.get_all_tools_config().values()
         ]
 
     @property
     def agent_skills(self) -> list[AgentSkill]:
         """Get the list of skills this agent provides."""
-        return self._agent_skills if self._agent_skills is not None else self._get_skills_from_tools()
+        return (
+            self._agent_skills
+            if self._agent_skills is not None
+            else self._get_skills_from_tools()
+        )
 
     @agent_skills.setter
     def agent_skills(self, skills: list[AgentSkill]) -> None:
@@ -190,7 +208,9 @@ class A2AServer:
         Returns:
             Starlette: A Starlette application configured to serve this agent.
         """
-        a2a_app = A2AStarletteApplication(agent_card=self.public_agent_card, http_handler=self.request_handler).build()
+        a2a_app = A2AStarletteApplication(
+            agent_card=self.public_agent_card, http_handler=self.request_handler
+        ).build()
 
         if self.mount_path:
             # Create parent app and mount the A2A app at the specified path
@@ -210,7 +230,9 @@ class A2AServer:
         Returns:
             FastAPI: A FastAPI application configured to serve this agent.
         """
-        a2a_app = A2AFastAPIApplication(agent_card=self.public_agent_card, http_handler=self.request_handler).build()
+        a2a_app = A2AFastAPIApplication(
+            agent_card=self.public_agent_card, http_handler=self.request_handler
+        ).build()
 
         if self.mount_path:
             # Create parent app and mount the A2A app at the specified path
@@ -245,9 +267,19 @@ class A2AServer:
         try:
             logger.info("Starting Strands A2A server...")
             if app_type == "fastapi":
-                uvicorn.run(self.to_fastapi_app(), host=host or self.host, port=port or self.port, **kwargs)
+                uvicorn.run(
+                    self.to_fastapi_app(),
+                    host=host or self.host,
+                    port=port or self.port,
+                    **kwargs,
+                )
             else:
-                uvicorn.run(self.to_starlette_app(), host=host or self.host, port=port or self.port, **kwargs)
+                uvicorn.run(
+                    self.to_starlette_app(),
+                    host=host or self.host,
+                    port=port or self.port,
+                    **kwargs,
+                )
         except KeyboardInterrupt:
             logger.warning("Strands A2A server shutdown requested (KeyboardInterrupt).")
         except Exception:

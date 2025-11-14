@@ -1,0 +1,23 @@
+{{- range .Values.agents }}
+{{- $agent := . }}
+{{- $ctx := dict "root" $ "agent" $agent }}
+{{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt") }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "platform-ai.agentFullname" $ctx }}
+  labels:
+    {{- include "platform-ai.labels" $ | nindent 4 }}
+    app.kubernetes.io/type: agent
+    app.kubernetes.io/component: {{ $agent.id }}
+spec:
+  type: {{ $config.service.type }}
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "platform-ai.agentSelectorLabels" $ctx | nindent 4 }}
+{{- end }}

@@ -1,3 +1,17 @@
 [tools]
 python = "3.13"
+ruff = "0.14.5"
 uv = "0.9.0"
+
+[tasks.run-agent]
+description = "Run the agent"
+dir = "agents/default"
+run = "uv run default-agent"
+
+[tasks.lint]
+description = "Lint the code"
+run = "ruff check agents/default/src"
+
+[tasks.format]
+description = "Format the code"
+run = "ruff format agents/default/src"

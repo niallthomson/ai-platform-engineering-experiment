@@ -30,12 +30,34 @@ Run Docker Compose:
 docker compose up --build
 ```
 
-The A2A endpoint will be accessible at `http://localhost:9000`.
+The A2A endpoint will be accessible at `http://localhost:9000`. You can test it with this command:
 
-## Kubernetes
+```bash
+curl -s -X POST http://localhost:9000 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "req-001",
+    "method": "message/send",
+    "params": {
+      "message": {
+        "role": "user",
+        "parts": [
+          {
+            "kind": "text",
+            "text": "What can you do in 40 words?"
+          }
+        ],
+        "messageId": "12345678-1234-1234-1234-123456789012"
+      }
+    }
+  }' | jq .
+```
+
+### Kubernetes
 
 TODO
 
-## AWS AgentCore
+### AWS AgentCore
 
 TODO

@@ -9,6 +9,13 @@ wheels/
 # Virtual environments
 .venv
 
+.ruff_cache
+
 .env
 
 .vscode
+
+NOTES.md
+
+values.yaml
+!helm/values.yaml

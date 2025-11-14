@@ -1,0 +1,106 @@
+{{- range .Values.mcpServers }}
+{{- $mcpServer := . }}
+{{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "platform-ai.mcpServerFullname" $ctx }}
+  labels:
+    {{- include "platform-ai.labels" $ | nindent 4 }}
+    app.kubernetes.io/type: mcp-server
+    app.kubernetes.io/component: {{ $mcpServer.id }}
+spec:
+  {{- if $mcpServer.autoscaling }}
+  {{- if not $mcpServer.autoscaling.enabled }}
+  replicas: {{ $mcpServer.replicas | default 1 }}
+  {{- end }}
+  {{- else }}
+  replicas: {{ $mcpServer.replicas | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "platform-ai.mcpServerSelectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      {{- with $mcpServer.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "platform-ai.labels" $ | nindent 8 }}
+        app.kubernetes.io/type: mcp-server
+        app.kubernetes.io/component: {{ $mcpServer.id }}
+        {{- with $mcpServer.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $mcpServer.serviceAccount }}
+      {{- if $mcpServer.serviceAccount.create }}
+      serviceAccountName: {{ include "platform-ai.mcpServerFullname" $ctx }}
+      {{- else }}
+      serviceAccountName: {{ $mcpServer.serviceAccount.name | default "default" }}
+      {{- end }}
+      {{- end }}
+      {{- with $mcpServer.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $mcpServer.id }}
+          {{- with $mcpServer.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ $mcpServer.image.repository }}:{{ $mcpServer.image.tag }}"
+          imagePullPolicy: {{ $mcpServer.image.pullPolicy | default "IfNotPresent" }}
+          {{- with $mcpServer.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $mcpServer.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $mcpServer.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "platform-ai.mcpServerFullname" $ctx }}
+            {{- if $mcpServer.secret }}
+            {{- if $mcpServer.secret.create }}
+            - secretRef:
+                name: {{ $mcpServer.secret.name | default (include "platform-ai.mcpServerFullname" $ctx) }}
+            {{- end }}
+            {{- end }}
+          {{- with $mcpServer.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $mcpServer.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $mcpServer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $mcpServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcpServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcpServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

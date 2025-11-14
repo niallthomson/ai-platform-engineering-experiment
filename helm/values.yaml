@@ -1,0 +1,170 @@
+# Default values for platform-ai.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Container image configuration
+image:
+  repository: your-registry/default-agent
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Default configuration for all agents
+agentDefaults:
+  replicas: 1
+
+  secret:
+    create: false
+    name: ""
+    annotations: {}
+    data: {}
+
+  serviceAccount:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+
+  podAnnotations: {}
+  podLabels: {}
+
+  podSecurityContext: {}
+    # fsGroup: 2000
+
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+
+  service:
+    type: ClusterIP
+    port: 9000
+
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
+
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+
+  model:
+    provider: bedrock
+    model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    bedrock:
+      region: us-west-2
+    openai:
+      base_url: ""
+
+# MCP Servers
+mcpServers: []
+  # - id: "example-mcp"
+  #   image:
+  #     repository: ghcr.io/example/mcp-server
+  #     tag: "1.0.0"
+  #     pullPolicy: IfNotPresent
+  #   replicas: 1
+  #   command: []
+  #   args: []
+  #   service:
+  #     type: ClusterIP
+  #     port: 3000
+  #   secret:
+  #     create: true
+  #     name: ""
+  #     annotations: {}
+  #     data:
+  #       API_KEY: "your-api-key"
+  #   serviceAccount:
+  #     create: false
+  #     automount: true
+  #     annotations: {}
+  #     name: ""
+  #   podAnnotations: {}
+  #   podLabels: {}
+  #   podSecurityContext: {}
+  #   securityContext: {}
+  #   resources: {}
+  #   autoscaling:
+  #     enabled: false
+  #     minReplicas: 1
+  #     maxReplicas: 10
+  #     targetCPUUtilizationPercentage: 80
+  #   livenessProbe: {}
+  #   readinessProbe: {}
+  #   nodeSelector: {}
+  #   tolerations: []
+  #   affinity: {}
+
+# Agents
+# NOTE: Any setting from agentDefaults can be overridden per agent
+agents: []
+  # - id: "example-agent"
+  #   # Agent-specific settings (cannot be set in agentDefaults):
+  #   name: "Example Agent"
+  #   description: |
+  #     Description of what this agent does
+  #   system_prompt: |
+  #     You are a helpful assistant
+  #   mcpServers:
+  #     # Use id to reference MCP servers deployed in this chart
+  #     - name: "MCP Server Name"
+  #       id: "example-mcp"
+  #       path: "/mcp"  # Optional path to append to URL
+  #       headers:
+  #         Authorization: "Bearer token"
+  #     # Or use url for external MCP servers
+  #     - name: "External MCP"
+  #       url: "https://mcp-server.example.com"
+  #       headers:
+  #         Authorization: "Bearer token"
+  #   a2a:
+  #     serverUrl: ""
+  #     # Use peerAgents to reference other agents by ID (URLs auto-generated)
+  #     peerAgents:
+  #       - "other-agent-id"
+  #     # Or use peerAgentUrls for full URLs (external agents)
+  #     peerAgentUrls:
+  #       - "https://external-agent.example.com"
+  #     security:
+  #       mode: bearer
+  #       bearer:
+  #         token: "your-token"
+  #       # oauth:
+  #       #   jwks_url: "https://idp/oauth2/default/v1/keys"
+  #       #   audience: "audience"
+  #       #   issuer: "https://idp/oauth2/default"

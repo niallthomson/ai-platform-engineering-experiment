@@ -16,7 +16,15 @@ from typing import Any, Callable, Literal
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import DataPart, FilePart, InternalError, Part, TaskState, TextPart, UnsupportedOperationError
+from a2a.types import (
+    DataPart,
+    FilePart,
+    InternalError,
+    Part,
+    TaskState,
+    TextPart,
+    UnsupportedOperationError,
+)
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 
@@ -34,6 +42,7 @@ from strands.types.media import (
 
 logger = logging.getLogger(__name__)
 
+
 # Needed due to https://github.com/strands-agents/sdk-python/issues/990
 class StrandsA2AExecutor(AgentExecutor):
     """Executor that adapts a Strands Agent to the A2A protocol.
@@ -43,12 +52,26 @@ class StrandsA2AExecutor(AgentExecutor):
     """
 
     # Default formats for each file type when MIME type is unavailable or unrecognized
-    DEFAULT_FORMATS = {"document": "txt", "image": "png", "video": "mp4", "unknown": "txt"}
+    DEFAULT_FORMATS = {
+        "document": "txt",
+        "image": "png",
+        "video": "mp4",
+        "unknown": "txt",
+    }
 
     # Handle special cases where format differs from extension
-    FORMAT_MAPPINGS = {"jpg": "jpeg", "htm": "html", "3gp": "three_gp", "3gpp": "three_gp", "3g2": "three_gp"}
+    FORMAT_MAPPINGS = {
+        "jpg": "jpeg",
+        "htm": "html",
+        "3gp": "three_gp",
+        "3gpp": "three_gp",
+        "3g2": "three_gp",
+    }
 
-    def __init__(self, agent_generator: Callable[[str | None], SAAgent],):
+    def __init__(
+        self,
+        agent_generator: Callable[[RequestContext | None], SAAgent],
+    ):
         """Initialize a StrandsA2AExecutor.
 
         Args:
@@ -85,7 +108,9 @@ class StrandsA2AExecutor(AgentExecutor):
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
-    async def _execute_streaming(self, context: RequestContext, updater: TaskUpdater) -> None:
+    async def _execute_streaming(
+        self, context: RequestContext, updater: TaskUpdater
+    ) -> None:
         """Execute request in streaming mode.
 
         Streams the agent's response in real-time, sending incremental updates
@@ -97,13 +122,15 @@ class StrandsA2AExecutor(AgentExecutor):
         """
         # Convert A2A message parts to Strands ContentBlocks
         if context.message and hasattr(context.message, "parts"):
-            content_blocks = self._convert_a2a_parts_to_content_blocks(context.message.parts)
+            content_blocks = self._convert_a2a_parts_to_content_blocks(
+                context.message.parts
+            )
             if not content_blocks:
                 raise ValueError("No content blocks available")
         else:
             raise ValueError("No content blocks available")
-          
-        agent = self.agent_generator(context.context_id)
+
+        agent = self.agent_generator(context)
 
         try:
             async for event in agent.stream_async(content_blocks):
@@ -112,7 +139,9 @@ class StrandsA2AExecutor(AgentExecutor):
             logger.exception("Error in streaming execution")
             raise
 
-    async def _handle_streaming_event(self, event: dict[str, Any], updater: TaskUpdater) -> None:
+    async def _handle_streaming_event(
+        self, event: dict[str, Any], updater: TaskUpdater
+    ) -> None:
         """Handle a single streaming event from the Strands Agent.
 
         Processes streaming events from the agent, converting data chunks to A2A
@@ -137,7 +166,9 @@ class StrandsA2AExecutor(AgentExecutor):
         elif "result" in event:
             await self._handle_agent_result(event["result"], updater)
 
-    async def _handle_agent_result(self, result: SAAgentResult | None, updater: TaskUpdater) -> None:
+    async def _handle_agent_result(
+        self, result: SAAgentResult | None, updater: TaskUpdater
+    ) -> None:
         """Handle the final result from the Strands Agent.
 
         Processes the agent's final result, extracts text content from the response,
@@ -172,7 +203,9 @@ class StrandsA2AExecutor(AgentExecutor):
         logger.warning("Cancellation requested but not supported")
         raise ServerError(error=UnsupportedOperationError())
 
-    def _get_file_type_from_mime_type(self, mime_type: str | None) -> Literal["document", "image", "video", "unknown"]:
+    def _get_file_type_from_mime_type(
+        self, mime_type: str | None
+    ) -> Literal["document", "image", "video", "unknown"]:
         """Classify file type based on MIME type.
 
         Args:
@@ -199,7 +232,9 @@ class StrandsA2AExecutor(AgentExecutor):
         else:
             return "unknown"
 
-    def _get_file_format_from_mime_type(self, mime_type: str | None, file_type: str) -> str:
+    def _get_file_format_from_mime_type(
+        self, mime_type: str | None, file_type: str
+    ) -> str:
         """Extract file format from MIME type using Python's mimetypes library.
 
         Args:
@@ -243,7 +278,9 @@ class StrandsA2AExecutor(AgentExecutor):
             return file_name.rsplit(".", 1)[0]
         return file_name
 
-    def _convert_a2a_parts_to_content_blocks(self, parts: list[Part]) -> list[ContentBlock]:
+    def _convert_a2a_parts_to_content_blocks(
+        self, parts: list[Part]
+    ) -> list[ContentBlock]:
         """Convert A2A message parts to Strands ContentBlocks.
 
         Args:
@@ -269,7 +306,9 @@ class StrandsA2AExecutor(AgentExecutor):
                     raw_file_name = getattr(file_obj, "name", "FileNameNotProvided")
                     file_name = self._strip_file_extension(raw_file_name)
                     file_type = self._get_file_type_from_mime_type(mime_type)
-                    file_format = self._get_file_format_from_mime_type(mime_type, file_type)
+                    file_format = self._get_file_format_from_mime_type(
+                        mime_type, file_type
+                    )
 
                     # Handle FileWithBytes vs FileWithUri
                     bytes_data = getattr(file_obj, "bytes", None)
@@ -309,14 +348,17 @@ class StrandsA2AExecutor(AgentExecutor):
                         # For URI files, create a text representation since Strands ContentBlocks expect bytes
                         content_blocks.append(
                             ContentBlock(
-                                text="[File: %s (%s)] - Referenced file at: %s" % (file_name, mime_type, uri_data)
+                                text="[File: %s (%s)] - Referenced file at: %s"
+                                % (file_name, mime_type, uri_data)
                             )
                         )
                 elif isinstance(part_root, DataPart):
                     # Handle DataPart - convert structured data to JSON text
                     try:
                         data_text = json.dumps(part_root.data, indent=2)
-                        content_blocks.append(ContentBlock(text="[Structured Data]\n%s" % data_text))
+                        content_blocks.append(
+                            ContentBlock(text="[Structured Data]\n%s" % data_text)
+                        )
                     except Exception:
                         logger.exception("Failed to serialize data part")
             except Exception:

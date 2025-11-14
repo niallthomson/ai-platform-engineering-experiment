@@ -1,0 +1,40 @@
+{{- range .Values.mcpServers }}
+{{- $mcpServer := . }}
+{{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
+{{- if $mcpServer.autoscaling }}
+{{- if $mcpServer.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "platform-ai.mcpServerFullname" $ctx }}
+  labels:
+    {{- include "platform-ai.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $mcpServer.id }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "platform-ai.mcpServerFullname" $ctx }}
+  minReplicas: {{ $mcpServer.autoscaling.minReplicas }}
+  maxReplicas: {{ $mcpServer.autoscaling.maxReplicas }}
+  metrics:
+    {{- if $mcpServer.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $mcpServer.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if $mcpServer.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $mcpServer.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

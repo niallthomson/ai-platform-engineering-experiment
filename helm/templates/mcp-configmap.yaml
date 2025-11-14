@@ -1,0 +1,13 @@
+{{- range .Values.mcpServers }}
+{{- $mcpServer := . }}
+{{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "platform-ai.mcpServerFullname" $ctx }}
+  labels:
+    {{- include "platform-ai.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $mcpServer.id }}
+data: {}
+{{- end }}
