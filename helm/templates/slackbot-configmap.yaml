@@ -1,0 +1,21 @@
+{{- if .Values.slackBot.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "platform-ai.slackBotFullname" . }}
+  labels:
+    {{- include "platform-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/type: slack-bot
+data:
+  {{- if .Values.slackBot.a2a }}
+  {{- if .Values.slackBot.a2a.url }}
+  SLACKBOT_a2a__url: {{ .Values.slackBot.a2a.url | quote }}
+  {{- else if .Values.slackBot.a2a.agentId }}
+  {{- $agentCtx := dict "root" . "agent" (dict "id" .Values.slackBot.a2a.agentId) }}
+  SLACKBOT_a2a__url: {{ printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $agentCtx) .Release.Namespace | quote }}
+  {{- end }}
+  {{- if .Values.slackBot.a2a.security }}
+  SLACKBOT_a2a__security__mode: {{ .Values.slackBot.a2a.security.mode | default "bearer" | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}

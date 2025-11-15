@@ -35,12 +35,11 @@ agentDefaults:
     # fsGroup: 2000
 
   securityContext:
-    runAsNonRoot: true
     # capabilities:
     #   drop:
     #   - ALL
     # readOnlyRootFilesystem: true
-    
+    # runAsNonRoot: true
     # runAsUser: 1000
 
   service:
@@ -169,3 +168,58 @@ agents: []
   #       #   jwks_url: "https://idp/oauth2/default/v1/keys"
   #       #   audience: "audience"
   #       #   issuer: "https://idp/oauth2/default"
+
+# Slack Bot
+slackBot:
+  enabled: false
+  replicas: 1
+
+  image:
+    repository: your-registry/slack-bot
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  secret:
+    create: false
+    name: ""
+    annotations: {}
+    data: {}
+      # SLACKBOT_slack__bot_token: "xoxb-your-bot-token"
+      # SLACKBOT_slack__app_token: "xapp-your-app-token"
+      # SLACKBOT_a2a__security__bearer__token: "your-api-key"
+
+  serviceAccount:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+
+  podAnnotations: {}
+  podLabels: {}
+
+  podSecurityContext: {}
+
+  securityContext: {}
+
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+  a2a:
+    # Reference an agent by ID (URL auto-generated)
+    agentId: ""
+    # Or use a full URL for external agents
+    url: ""
+    security:
+      mode: bearer
+      bearer:
+        token: ""

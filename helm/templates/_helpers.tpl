@@ -140,3 +140,19 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Slack Bot fullname
+*/}}
+{{- define "platform-ai.slackBotFullname" -}}
+{{- printf "%s-slack-bot" (include "platform-ai.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Slack Bot selector labels
+*/}}
+{{- define "platform-ai.slackBotSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "platform-ai.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/type: slack-bot
+{{- end }}

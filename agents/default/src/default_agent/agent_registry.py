@@ -76,7 +76,7 @@ class A2AAgentRegistry:
 
     def __init__(self, agent_urls: list[str], refresh_interval: int = 60):
         self.entries = {url: AgentRegistryEntry(url) for url in agent_urls}
-        self.httpx_client = httpx.AsyncClient(timeout=10)
+        self.httpx_client = httpx.AsyncClient(timeout=120)
         self.refresh_interval = refresh_interval
         self._refresh_task = None
         self._running = False

@@ -10,6 +10,11 @@ Deployed MCP servers:
 {{- end }}
 {{- end }}
 
+{{- if .Values.slackBot.enabled }}
+Slack Bot:
+- Deployed and connected to agent: {{ .Values.slackBot.a2a.agentId | default "external" }}
+{{- end }}
+
 {{- if .Values.agentDefaults.ingress.enabled }}
 Access agents via ingress:
 {{- range .Values.agents }}
@@ -42,4 +47,9 @@ Access MCP servers via port-forward:
 {{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
   kubectl port-forward --namespace {{ $.Release.Namespace }} svc/{{ include "platform-ai.mcpServerFullname" $ctx }} 8080:80  ({{ $mcpServer.id }})
 {{- end }}
+{{- end }}
+
+{{- if .Values.slackBot.enabled }}
+Slack Bot logs:
+  kubectl logs --namespace {{ .Release.Namespace }} -l app.kubernetes.io/type=slack-bot -f
 {{- end }}

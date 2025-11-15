@@ -1,0 +1,71 @@
+{{- if .Values.slackBot.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "platform-ai.slackBotFullname" . }}
+  labels:
+    {{- include "platform-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/type: slack-bot
+spec:
+  replicas: {{ .Values.slackBot.replicas }}
+  selector:
+    matchLabels:
+      {{- include "platform-ai.slackBotSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.slackBot.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "platform-ai.labels" . | nindent 8 }}
+        app.kubernetes.io/type: slack-bot
+        {{- with .Values.slackBot.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.slackBot.serviceAccount.create }}
+      serviceAccountName: {{ include "platform-ai.slackBotFullname" . }}
+      {{- else }}
+      serviceAccountName: {{ .Values.slackBot.serviceAccount.name | default "default" }}
+      {{- end }}
+      {{- with .Values.slackBot.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: slack-bot
+          {{- with .Values.slackBot.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.slackBot.image.repository }}:{{ .Values.slackBot.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.slackBot.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "platform-ai.slackBotFullname" . }}
+            {{- if .Values.slackBot.secret.create }}
+            - secretRef:
+                name: {{ .Values.slackBot.secret.name | default (include "platform-ai.slackBotFullname" .) }}
+            {{- end }}
+          {{- with .Values.slackBot.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.slackBot.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.slackBot.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.slackBot.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
