@@ -14,6 +14,9 @@ from a2a.utils.message import get_message_text
 
 logger = logging.getLogger(__name__)
 
+# Store context_id per DM channel
+context_store: dict[str, str] = {}
+
 
 def _parse_response_text(response_obj: Task | Message | None) -> str:
     """Extract text content from A2A response object."""
@@ -30,8 +33,10 @@ def _parse_response_text(response_obj: Task | Message | None) -> str:
     return ""
 
 
-async def call_agent(endpoint: str, user_input: str, api_key: str = ""):
-    """Execute A2A agent call and return response text."""
+async def call_agent(
+    endpoint: str, user_input: str, api_key: str = "", context_id: str | None = None
+) -> tuple[str, str | None]:
+    """Execute A2A agent call and return response text and context_id."""
     http_client = httpx.AsyncClient(
         timeout=600,
         headers={"Authorization": f"Bearer {api_key}"},
@@ -50,9 +55,10 @@ async def call_agent(endpoint: str, user_input: str, api_key: str = ""):
         role=Role.user,
         parts=[Part(TextPart(kind="text", text=formatted_input))],
         message_id=uuid4().hex,
+        context_id=context_id,
     )
 
-    logger.debug("Calling A2A agent at: %s", endpoint)
+    logger.debug("Calling A2A agent at: %s with context_id: %s", endpoint, context_id)
 
     task_mgr = ClientTaskManager()
     final_message: Message | None = None
@@ -65,22 +71,30 @@ async def call_agent(endpoint: str, user_input: str, api_key: str = ""):
             final_message = evt
 
     result_task = task_mgr.get_task()
-    response_text = (
-        _parse_response_text(result_task)
-        if result_task
-        else (
-            _parse_response_text(final_message)
-            if final_message
-            else "No response from the agent"
-        )
-    )
+
+    response_message = ""
+    response_context_id = ""
+
+    if result_task:
+        response_message = _parse_response_text(result_task)
+        response_context_id = result_task.context_id
+    elif final_message is not None:
+        response_message = _parse_response_text(final_message)
+        response_context_id = final_message.context_id
+    else:
+        raise RuntimeError("No response from agent")
 
     await http_client.aclose()
-    return response_text
+    return response_message, response_context_id if context_id is None else None
 
 
 async def send_agent_response(
-    client: WebClient, cid: str, query: str, agent_url: str, api_key: str = ""
+    client: WebClient,
+    cid: str,
+    query: str,
+    user: str,
+    agent_url: str,
+    api_key: str = "",
 ):
     """Send query to agent and post response to channel."""
     if not agent_url:
@@ -90,17 +104,29 @@ async def send_agent_response(
         )  # pyright: ignore[reportGeneralTypeIssues]
         return
 
-    await client.chat_postMessage(
+    await client.chat_postEphemeral(
         channel=cid,
+        user=user,
         text="Thinking...",
     )  # pyright: ignore[reportGeneralTypeIssues]
 
+    # Retrieve existing context_id for this channel
+    context_id = context_store.get(cid)
+
     try:
-        agent_response = await call_agent(agent_url, query, api_key)
+        agent_response, new_context_id = await call_agent(
+            agent_url, query, api_key, context_id
+        )
+
+        # Store the new context_id for this channel
+        if new_context_id:
+            context_store[cid] = new_context_id
+            logger.debug("Stored context_id %s for channel %s", new_context_id, cid)
+        else:
+            logger.debug("Re-used context_id %s for channel %s", context_id, cid)
+
         if agent_response and agent_response.strip():
             blocks = [
-                {"type": "mrkdwn", "text": f"*Query:* {query}"},
-                {"type": "divider"},
                 {"type": "section", "text": {"type": "mrkdwn", "text": agent_response}},
             ]
 
@@ -120,7 +146,7 @@ async def send_agent_response(
         err_blocks = [
             {
                 "type": "header",
-                "text": {"type": "plain_text", "text": "❌ Error", "emoji": True},
+                "text": {"type": "mrkdwn", "text": "❌ Error", "emoji": True},
             },
             {
                 "type": "context",
@@ -131,7 +157,7 @@ async def send_agent_response(
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "An error occurred, please report this to your administrator```",
+                    "text": "An error occurred, please report this to your administrator",
                 },
             },
         ]
@@ -146,8 +172,27 @@ def setup_handlers(slack_app: AsyncApp, agent_url: str, api_key: str = ""):
     async def handle_direct_message(event, client: WebClient):
         """Process direct messages sent to the bot."""
         if event.get("channel_type") == "im" and not event.get("bot_id"):
+            # Check for reset command
+            if event["text"].strip().lower() in ["reset", "/reset"]:
+                cid = event["channel"]
+                if cid in context_store:
+                    del context_store[cid]
+                    await client.chat_postMessage(
+                        channel=cid, text="Conversation context has been reset."
+                    )  # pyright: ignore[reportGeneralTypeIssues]
+                else:
+                    await client.chat_postMessage(
+                        channel=cid, text="No active conversation context to reset."
+                    )  # pyright: ignore[reportGeneralTypeIssues]
+                return
+
             await send_agent_response(
-                client, event["channel"], event["text"], agent_url, api_key
+                client,
+                event["channel"],
+                event["text"],
+                event["user"],
+                agent_url,
+                api_key,
             )
 
     slack_app.event("message")(handle_direct_message)
