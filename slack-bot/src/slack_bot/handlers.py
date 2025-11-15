@@ -95,35 +95,32 @@ async def send_agent_response(
     user: str,
     agent_url: str,
     api_key: str = "",
+    thread_ts: str | None = None,
 ):
     """Send query to agent and post response to channel."""
     if not agent_url:
         await client.chat_postMessage(
             channel=cid,
             text="A2A agent URL must be configured to use this command.",
+            thread_ts=thread_ts,
         )  # pyright: ignore[reportGeneralTypeIssues]
         return
 
-    await client.chat_postEphemeral(
-        channel=cid,
-        user=user,
-        text="Thinking...",
-    )  # pyright: ignore[reportGeneralTypeIssues]
-
-    # Retrieve existing context_id for this channel
-    context_id = context_store.get(cid)
+    # Retrieve existing context_id for this channel/thread
+    context_key = f"{cid}:{thread_ts}" if thread_ts else cid
+    context_id = context_store.get(context_key)
 
     try:
         agent_response, new_context_id = await call_agent(
             agent_url, query, api_key, context_id
         )
 
-        # Store the new context_id for this channel
+        # Store the new context_id for this channel/thread
         if new_context_id:
-            context_store[cid] = new_context_id
-            logger.debug("Stored context_id %s for channel %s", new_context_id, cid)
+            context_store[context_key] = new_context_id
+            logger.debug("Stored context_id %s for key %s", new_context_id, context_key)
         else:
-            logger.debug("Re-used context_id %s for channel %s", context_id, cid)
+            logger.debug("Re-used context_id %s for key %s", context_id, context_key)
 
         if agent_response and agent_response.strip():
             blocks = [
@@ -136,10 +133,11 @@ async def send_agent_response(
                 text=f"AI Agent Response: {agent_response[:100]}..."
                 if len(agent_response) > 100
                 else f"AI Agent Response: {agent_response}",
+                thread_ts=thread_ts,
             )  # pyright: ignore[reportGeneralTypeIssues]
         else:
             await client.chat_postMessage(
-                channel=cid, text="Agent returned no response."
+                channel=cid, text="Agent returned no response.", thread_ts=thread_ts
             )  # pyright: ignore[reportGeneralTypeIssues]
     except Exception as err:
         logger.error("Agent invocation failed: %s", err)
@@ -162,7 +160,10 @@ async def send_agent_response(
             },
         ]
         await client.chat_postMessage(
-            channel=cid, blocks=err_blocks, text=f"AI Agent Error: {str(err)}"
+            channel=cid,
+            blocks=err_blocks,
+            text=f"AI Agent Error: {str(err)}",
+            thread_ts=thread_ts,
         )  # pyright: ignore[reportGeneralTypeIssues]
 
 
@@ -195,4 +196,28 @@ def setup_handlers(slack_app: AsyncApp, agent_url: str, api_key: str = ""):
                 api_key,
             )
 
+    async def handle_app_mention(event, client: WebClient):
+        """Process mentions of the bot in channels."""
+        # Extract the message text and remove the bot mention
+        text = event.get("text", "")
+        # Remove the bot mention from the text
+        query = text.split(">", 1)[1].strip() if ">" in text else text.strip()
+
+        if not query:
+            return
+
+        # Get thread_ts - if already in a thread, use it; otherwise use the message ts to create a thread
+        thread_ts = event.get("thread_ts") or event.get("ts")
+
+        await send_agent_response(
+            client,
+            event["channel"],
+            query,
+            event["user"],
+            agent_url,
+            api_key,
+            thread_ts=thread_ts,
+        )
+
     slack_app.event("message")(handle_direct_message)
+    slack_app.event("app_mention")(handle_app_mention)
