@@ -21,10 +21,8 @@ from a2a.server.tasks import (
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, SecurityScheme
 from fastapi import FastAPI
 from starlette.applications import Starlette
-from .executor import StrandsA2AExecutor
+from .executor import StrandsAgentInstance, StrandsA2AExecutor
 from a2a.server.agent_execution import RequestContext
-
-from strands.agent.agent import Agent as SAAgent
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +33,7 @@ class A2AServer:
 
     def __init__(
         self,
-        agent_generator: Callable[[RequestContext | None], SAAgent],
+        agent_generator: Callable[[RequestContext | None], StrandsAgentInstance],
         *,
         # AgentCard
         host: str = "127.0.0.1",
@@ -79,7 +77,9 @@ class A2AServer:
         self.port = port
         self.version = version
 
-        self.strands_agent = agent_generator(None)
+        instance = agent_generator(None)
+
+        self.strands_agent = instance.agent
 
         self.name = self.strands_agent.name
         self.description = self.strands_agent.description

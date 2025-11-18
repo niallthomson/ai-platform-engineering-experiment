@@ -9,13 +9,42 @@ metadata:
 data:
   {{- if .Values.slackBot.a2a }}
   {{- if .Values.slackBot.a2a.url }}
-  SLACKBOT_a2a__url: {{ .Values.slackBot.a2a.url | quote }}
+  SLACKBOT_A2A__URL: {{ .Values.slackBot.a2a.url | quote }}
   {{- else if .Values.slackBot.a2a.agentId }}
+  {{- $agent := get .Values.agents .Values.slackBot.a2a.agentId }}
   {{- $agentCtx := dict "root" . "agent" (dict "id" .Values.slackBot.a2a.agentId) }}
-  SLACKBOT_a2a__url: {{ printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $agentCtx) .Release.Namespace | quote }}
+  {{- if and $agent.server $agent.server.url }}
+  SLACKBOT_A2A__URL: {{ $agent.server.url | quote }}
+  {{- else }}
+  SLACKBOT_A2A__URL: {{ printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $agentCtx) .Release.Namespace | quote }}
   {{- end }}
-  {{- if .Values.slackBot.a2a.security }}
-  SLACKBOT_a2a__security__mode: {{ .Values.slackBot.a2a.security.mode | default "bearer" | quote }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.slackBot.auth }}
+  SLACKBOT_AUTH__MODE: {{ .Values.slackBot.auth.mode | default "bearer" | quote }}
+  {{- if eq .Values.slackBot.auth.mode "oidc" }}
+  {{- if .Values.slackBot.auth.oidc }}
+  {{- if .Values.slackBot.auth.oidc.configuration_url }}
+  SLACKBOT_AUTH__OIDC__CONFIGURATION_URL: {{ .Values.slackBot.auth.oidc.configuration_url | quote }}
+  {{- end }}
+  {{- if .Values.slackBot.auth.oidc.client_id }}
+  SLACKBOT_AUTH__OIDC__CLIENT_ID: {{ .Values.slackBot.auth.oidc.client_id | quote }}
+  {{- end }}
+  {{- if .Values.slackBot.auth.oidc.scope }}
+  SLACKBOT_AUTH__OIDC__SCOPE: {{ .Values.slackBot.auth.oidc.scope | quote }}
+  {{- end }}
+  {{- if .Values.slackBot.auth.oidc.token_store }}
+  {{- if .Values.slackBot.auth.oidc.token_store.backend }}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE_BACKEND: {{ .Values.slackBot.auth.oidc.token_store.backend | quote }}
+  {{- end }}
+  {{- if .Values.slackBot.auth.oidc.token_store.redis_url }}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE_REDIS_URL: {{ .Values.slackBot.auth.oidc.token_store.redis_url | quote }}
+  {{- end }}
+  {{- if .Values.slackBot.auth.oidc.token_store.key_prefix }}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE_KEY_PREFIX: {{ .Values.slackBot.auth.oidc.token_store.key_prefix | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
   {{- end }}
   {{- end }}
 {{- end }}

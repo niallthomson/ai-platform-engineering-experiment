@@ -1,9 +1,12 @@
 import logging
+from fnmatch import fnmatch
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.authentication import SimpleUser
+
+logger = logging.getLogger(__name__)
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
@@ -16,8 +19,12 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         public_paths: list[str] = None,  # type: ignore
     ):
         super().__init__(app)
-        self.public_paths = set(public_paths or [])
+        self.public_paths = public_paths or []
         self.token = token
+
+    def _is_public_path(self, path: str) -> bool:
+        """Check if path matches any public path pattern."""
+        return any(fnmatch(path, pattern) for pattern in self.public_paths)
 
     async def dispatch(self, request: Request, call_next):
         """
@@ -29,7 +36,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Allow public paths and anonymous access
-        if path in self.public_paths:
+        if self._is_public_path(path):
             return await call_next(request)
 
         # Authenticate the request

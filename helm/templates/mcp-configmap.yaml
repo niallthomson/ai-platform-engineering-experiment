@@ -1,6 +1,7 @@
 {{- range .Values.mcpServers }}
 {{- $mcpServer := . }}
 {{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
+{{- $mcpEnv := $mcpServer.env | default dict }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -9,5 +10,8 @@ metadata:
   labels:
     {{- include "platform-ai.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $mcpServer.id }}
-data: {}
+data:
+  {{- range $key, $value := $mcpEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
 {{- end }}

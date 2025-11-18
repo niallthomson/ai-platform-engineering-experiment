@@ -1,47 +1,72 @@
 import logging
+from fnmatch import fnmatch
 from typing import Optional
 from starlette.applications import Starlette
+from starlette.authentication import SimpleUser
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 import jwt
 from jwt import PyJWKClient
+import httpx
+
+logger = logging.getLogger(__name__)
 
 
-class OAuth2JWTAuthMiddleware(BaseHTTPMiddleware):
-    """Starlette middleware that authenticates A2A access using OAuth2 JWT tokens."""
+class OIDCJWTAuthMiddleware(BaseHTTPMiddleware):
+    """Starlette middleware that authenticates A2A access using OIDC JWT tokens."""
 
     def __init__(
         self,
         app: Starlette,
-        jwks_url: str,
-        audience: Optional[str] = None,
-        issuer: Optional[str] = None,
+        configuration_url: str,
+        audiences: Optional[list[str]] = None,
         public_paths: list[str] = None,  # type: ignore
     ):
         super().__init__(app)
-        self.public_paths = set(public_paths or [])
-        self.jwks_client = PyJWKClient(jwks_url)
-        self.audience = audience
-        self.issuer = issuer
+        self.public_paths = public_paths or []
+        self.configuration_url = configuration_url
+        oidc_config = self._discover_oidc_config()
+        self.jwks_client = PyJWKClient(oidc_config["jwks_uri"])
+        self.audiences = audiences
+        self.issuer = oidc_config.get("issuer")
+
+    def _is_public_path(self, path: str) -> bool:
+        """Check if path matches any public path pattern."""
+        return any(fnmatch(path, pattern) for pattern in self.public_paths)
+
+    def _discover_oidc_config(self) -> dict:
+        """Discover OIDC configuration from well-known endpoint."""
+        try:
+            response = httpx.get(self.configuration_url, timeout=10)
+            response.raise_for_status()
+            config = response.json()
+            if not config.get("jwks_uri"):
+                raise ValueError("jwks_uri not found in OIDC configuration")
+            logger.info("Discovered JWKS URL: %s", config["jwks_uri"])
+            if config.get("issuer"):
+                logger.info("Discovered issuer: %s", config["issuer"])
+            return config
+        except Exception as e:
+            logger.error(
+                "Failed to discover OIDC configuration from %s: %s",
+                self.configuration_url,
+                e,
+            )
+            raise
 
     async def dispatch(self, request: Request, call_next):
-        """
-        Middleware to authenticate requests using OAuth2 JWT.
-        :param request:
-        :param call_next:
-        :return:
-        """
+        """Middleware to authenticate requests using OIDC JWT."""
         path = request.url.path
 
         # Allow public paths
-        if path in self.public_paths:
+        if self._is_public_path(path):
             return await call_next(request)
 
         # Authenticate the request
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            logging.warning("Missing or malformed Authorization header")
+            logger.warning("Missing or malformed Authorization header")
             return self._unauthorized(
                 "Missing or malformed Authorization header.", request
             )
@@ -56,33 +81,50 @@ class OAuth2JWTAuthMiddleware(BaseHTTPMiddleware):
                 signing_key.key,
                 algorithms=["RS256"],
                 issuer=self.issuer,
-                audience=self.audience,
                 options={
                     "require": ["exp", "iss", "aud"],
                     "verify_signature": True,
                     "verify_exp": True,
                     "verify_nbf": True,
                     "verify_iss": True,
-                    "verify_aud": True,
+                    "verify_aud": False,
                 },
             )
 
-            request.state.jwt_payload = payload
+            # Verify at least one audience matches
+            if self.audiences:
+                token_audiences = payload.get("aud", [])
+                if isinstance(token_audiences, str):
+                    token_audiences = [token_audiences]
+                if not any(aud in self.audiences for aud in token_audiences):
+                    raise jwt.InvalidAudienceError("Token audience not allowed")
+
+            user_id = (
+                payload.get("preferred_username")
+                or payload.get("sub")
+                or payload.get("email")
+                or payload.get("client_id")
+            )
+
+            request.state.token = token
+
+            request.scope["user"] = SimpleUser(user_id)
+            request.scope["token"] = token
 
         except jwt.ExpiredSignatureError:
-            logging.warning("JWT token has expired")
+            logger.warning("JWT token has expired")
             return self._unauthorized("Token has expired.", request)
         except jwt.InvalidAudienceError:
-            logging.warning("Invalid JWT audience")
+            logger.warning("Invalid JWT audience")
             return self._unauthorized("Invalid token audience.", request)
         except jwt.InvalidIssuerError:
-            logging.warning("Invalid JWT issuer")
+            logger.warning("Invalid JWT issuer")
             return self._unauthorized("Invalid token issuer.", request)
         except jwt.InvalidTokenError as e:
-            logging.warning("Invalid JWT token: %s", e)
+            logger.warning("Invalid JWT token: %s", e)
             return self._unauthorized("Invalid token.", request)
         except Exception as e:
-            logging.error("JWT validation error: %s", e, exc_info=True)
+            logger.error("JWT validation error: %s", e, exc_info=True)
             return self._forbidden(f"Authentication failed: {e}", request)
 
         return await call_next(request)

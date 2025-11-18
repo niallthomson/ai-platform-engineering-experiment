@@ -96,6 +96,7 @@ async def send_agent_response(
     agent_url: str,
     api_key: str = "",
     thread_ts: str | None = None,
+    auth_manager=None,
 ):
     """Send query to agent and post response to channel."""
     if not agent_url:
@@ -105,6 +106,13 @@ async def send_agent_response(
             thread_ts=thread_ts,
         )  # pyright: ignore[reportGeneralTypeIssues]
         return
+
+    # Check authentication if auth_manager is provided
+    if auth_manager:
+        token = await auth_manager.ensure_authenticated(user, client)
+        if not token:
+            return
+        api_key = token
 
     # Retrieve existing context_id for this channel/thread
     context_key = f"{cid}:{thread_ts}" if thread_ts else cid
@@ -141,33 +149,16 @@ async def send_agent_response(
             )  # pyright: ignore[reportGeneralTypeIssues]
     except Exception as err:
         logger.error("Agent invocation failed: %s", err)
-        err_blocks = [
-            {
-                "type": "header",
-                "text": {"type": "mrkdwn", "text": "❌ Error", "emoji": True},
-            },
-            {
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": f"*Query:* {query}"}],
-            },
-            {"type": "divider"},
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "An error occurred, please report this to your administrator",
-                },
-            },
-        ]
         await client.chat_postMessage(
             channel=cid,
-            blocks=err_blocks,
-            text=f"AI Agent Error: {str(err)}",
+            text="❌ Error: There was an issue processing your request, please contact your administrator",
             thread_ts=thread_ts,
         )  # pyright: ignore[reportGeneralTypeIssues]
 
 
-def setup_handlers(slack_app: AsyncApp, agent_url: str, api_key: str = ""):
+def setup_handlers(
+    slack_app: AsyncApp, agent_url: str, api_key: str = "", auth_manager=None
+):
     """Configure Slack event handlers."""
 
     async def handle_direct_message(event, client: WebClient):
@@ -194,6 +185,7 @@ def setup_handlers(slack_app: AsyncApp, agent_url: str, api_key: str = ""):
                 event["user"],
                 agent_url,
                 api_key,
+                auth_manager=auth_manager,
             )
 
     async def handle_app_mention(event, client: WebClient):
@@ -217,6 +209,7 @@ def setup_handlers(slack_app: AsyncApp, agent_url: str, api_key: str = ""):
             agent_url,
             api_key,
             thread_ts=thread_ts,
+            auth_manager=auth_manager,
         )
 
     slack_app.event("message")(handle_direct_message)

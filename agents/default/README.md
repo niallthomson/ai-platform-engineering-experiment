@@ -30,46 +30,89 @@ The agent will detect a file named `agent_config.yaml` in the current working di
 Configuration file format:
 
 ```yaml
-agent:
-  name: Agent name
-  description: My agent description
-  system_prompt: You are an example agent
-  model:
-    provider: bedrock # or openai
-    model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    bedrock:
-      region: us-west-2
-    openai:
-      base_url: http://endpoint
-  mcp:
-    - name: Some MCP server
-      url: https://some-mcp-server/mcp
-      headers:
-        Authorization: Bearer dummytoken
-      env:
-        SOME_ENV_VAR: dummyvalue
+name: Agent name
+description: My agent description
+system_prompt: You are an example agent
 
-  a2a:
-    server:
-      host: 127.0.0.1
-      port: 9000
-      url: http://127.0.0.1
-    security:
-      mode: bearer # or oauth
-      bearer:
-        token: somesecuretoken
-      oauth:
-        jwks_url: "https://idp/oauth2/default/v1/keys"
-        audience: "someaudience"
-        issuer: "https://idp/oauth2/default"
-    peer_agents:
-      - https://someagent
+model:
+  provider: bedrock # or openai
+  model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+  bedrock:
+    region: us-west-2
+  openai:
+    base_url: http://endpoint
+
+mcp_servers:
+  - name: Some MCP server
+    url: https://some-mcp-server/mcp
+    headers:
+      Authorization: Bearer dummytoken
+    env:
+      SOME_ENV_VAR: dummyvalue
+
+server:
+  host: 0.0.0.0
+  port: 9000
+  url: http://127.0.0.1:9000
+
+a2a:
+  peer_agents:
+    - https://someagent
+
+auth:
+  mode: bearer # or "oidc" or "none"
+  bearer:
+    token: somesecuretoken
+  # oidc:
+  #   configuration_url: "https://auth.example.com/realms/platform/.well-known/openid-configuration"
+  #   audience: "someaudience"
 ```
 
-These settings can be overridden with environment variables, for example:
+## Authentication Modes
 
+The agent supports three authentication modes:
+
+### None
+
+No authentication required (not recommended for production).
+
+```yaml
+auth:
+  mode: none
 ```
-export AGENT_name="Overridden name"
-export AGENT_model__bedrock__region="us-west-2"
-export AGENT_a2a__peer_agents='["http://someagent"]'
+
+### Bearer Token
+
+Shared bearer token authentication.
+
+```yaml
+auth:
+  mode: bearer
+  bearer:
+    token: your-secure-token
+```
+
+### OIDC
+
+OIDC/OAuth2 JWT token validation. MCP endpoints (`/mcp/*`) are public when OIDC is enabled.
+
+```yaml
+auth:
+  mode: oidc
+  oidc:
+    configuration_url: https://auth.example.com/realms/platform/.well-known/openid-configuration
+    audience: your-audience
+```
+
+## Environment Variables
+
+Settings can be overridden with environment variables:
+
+```bash
+export AGENT_NAME="Overridden name"
+export AGENT_MODEL__BEDROCK__REGION="us-west-2"
+export AGENT_SERVER__PORT="9000"
+export AGENT_A2A__PEER_AGENTS='["http://someagent"]'
+export AGENT_AUTH__MODE="oidc"
+export AGENT_AUTH__OIDC__CONFIGURATION_URL="https://auth.example.com/.well-known/openid-configuration"
 ```

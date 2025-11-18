@@ -1,55 +1,18 @@
 Deployed agents:
-{{- range .Values.agents }}
-- {{ .name }} ({{ .id }})
+{{- range $agentId, $agent := .Values.agents }}
+  - {{ $agent.name }} ({{ $agentId }}){{- if $agent.server }}{{- if $agent.server.url }} - {{ $agent.server.url }}{{- end }}{{- end }}
 {{- end }}
 
 {{- if .Values.mcpServers }}
+
 Deployed MCP servers:
 {{- range .Values.mcpServers }}
-- {{ .id }}
+  - {{ .id }}
 {{- end }}
 {{- end }}
 
 {{- if .Values.slackBot.enabled }}
+
 Slack Bot:
-- Deployed and connected to agent: {{ .Values.slackBot.a2a.agentId | default "external" }}
-{{- end }}
-
-{{- if .Values.agentDefaults.ingress.enabled }}
-Access agents via ingress:
-{{- range .Values.agents }}
-{{- $agent := . }}
-{{- $ctx := dict "root" $ "agent" $agent }}
-{{- range $.Values.agentDefaults.ingress.hosts }}
-  http{{ if $.Values.agentDefaults.ingress.tls }}s{{ end }}://{{ . }}/  ({{ $agent.name }})
-{{- end }}
-{{- end }}
-{{- else if contains "LoadBalancer" .Values.agentDefaults.service.type }}
-Access agents via LoadBalancer:
-{{- range .Values.agents }}
-{{- $agent := . }}
-{{- $ctx := dict "root" $ "agent" $agent }}
-  kubectl get svc --namespace {{ $.Release.Namespace }} {{ include "platform-ai.agentFullname" $ctx }} ({{ $agent.name }})
-{{- end }}
-{{- else }}
-Access agents via port-forward:
-{{- range .Values.agents }}
-{{- $agent := . }}
-{{- $ctx := dict "root" $ "agent" $agent }}
-  kubectl port-forward --namespace {{ $.Release.Namespace }} svc/{{ include "platform-ai.agentFullname" $ctx }} 8080:80  ({{ $agent.name }})
-{{- end }}
-{{- end }}
-
-{{- if .Values.mcpServers }}
-Access MCP servers via port-forward:
-{{- range .Values.mcpServers }}
-{{- $mcpServer := . }}
-{{- $ctx := dict "root" $ "mcpServer" $mcpServer }}
-  kubectl port-forward --namespace {{ $.Release.Namespace }} svc/{{ include "platform-ai.mcpServerFullname" $ctx }} 8080:80  ({{ $mcpServer.id }})
-{{- end }}
-{{- end }}
-
-{{- if .Values.slackBot.enabled }}
-Slack Bot logs:
-  kubectl logs --namespace {{ .Release.Namespace }} -l app.kubernetes.io/type=slack-bot -f
+  - Connected to agent: {{ index $.Values.agents .Values.slackBot.a2a.agentId "name" | default .Values.slackBot.a2a.agentId | default "external" }}
 {{- end }}

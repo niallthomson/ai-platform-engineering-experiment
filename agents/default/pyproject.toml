@@ -5,9 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "strands-agents[a2a,openai]>=1.10.0",
-    "strands-agents-builder>=0.1.10",
-    "strands-agents-tools>=0.2.9",
+    "strands-agents[a2a,openai]==1.14.0",
+    "strands-agents-tools>=0.2.15",
     "dynaconf>=3.2.11",
     "httpx>=0.28.1",
     "a2a-sdk>=0.3.8",

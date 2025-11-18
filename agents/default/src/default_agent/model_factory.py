@@ -3,14 +3,16 @@ from strands.models import Model, BedrockModel
 from strands.models.openai import OpenAIModel
 from .config import ModelConfig
 
+logger = logging.getLogger(__name__)
+
 
 def create_model(config: ModelConfig) -> Model:
-    logging.info(f"Model provider: {config.provider}")
-    logging.info(f"Model ID: {config.model_id}")
+    logger.info(f"Model provider: {config.provider}")
+    logger.info(f"Model ID: {config.model_id}")
 
     match config.provider:
         case "bedrock":
-            logging.info(f"Bedrock region: {config.bedrock.region}")
+            logger.info(f"Bedrock region: {config.bedrock.region}")
 
             return BedrockModel(
                 model_id=config.model_id,
@@ -20,7 +22,7 @@ def create_model(config: ModelConfig) -> Model:
             )
 
         case "openai":
-            logging.info(f"OpenAI base URL: {config.openai.base_url}")
+            logger.info(f"OpenAI base URL: {config.openai.base_url}")
 
             return OpenAIModel(
                 model_id=config.model_id,
@@ -32,5 +34,5 @@ def create_model(config: ModelConfig) -> Model:
             )
 
         case _:
-            logging.error(f"Unknown model provider: {config.provider}")
+            logger.error(f"Unknown model provider: {config.provider}")
             exit(1)

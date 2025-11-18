@@ -1,6 +1,6 @@
-{{- range .Values.agents }}
-{{- $agent := . }}
-{{- $ctx := dict "root" $ "agent" $agent }}
+{{- range $agentId, $agent := .Values.agents }}
+{{- $agentWithId := merge (dict "id" $agentId) $agent }}
+{{- $ctx := dict "root" $ "agent" $agentWithId }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -8,33 +8,21 @@ metadata:
   name: {{ include "platform-ai.agentFullname" $ctx }}
   labels:
     {{- include "platform-ai.labels" $ | nindent 4 }}
-    app.kubernetes.io/component: {{ $agent.id }}
+    app.kubernetes.io/component: {{ $agentId }}
 data:
   AGENT_NAME: {{ $agent.name | quote }}
   AGENT_DESCRIPTION: {{ $agent.description | quote }}
-  AGENT_system_prompt: {{ $agent.system_prompt | quote }}
-  AGENT_A2A__SERVER__host: 0.0.0.0
+  AGENT_SYSTEM_PROMPT: {{ $agent.system_prompt | quote }}
+  AGENT_SERVER__HOST: 0.0.0.0
   {{- if $agent.mcpServers }}
-  AGENT_mcp_servers: {{ include "platform-ai.mcpServersToPython" (dict "servers" $agent.mcpServers "root" $) | quote }}
+  AGENT_MCP_SERVERS: {{ include "platform-ai.mcpServersToPython" (dict "servers" $agent.mcpServers "root" $) | quote }}
   {{- end }}
-  {{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt" "mcpServers" "a2a") }}
-  {{- if $config.model }}
-  AGENT_model__provider: {{ $config.model.provider | quote }}
-  AGENT_model__model_id: {{ $config.model.model_id | quote }}
-  {{- if eq $config.model.provider "bedrock" }}
-  {{- if $config.model.bedrock }}
-  AGENT_model__bedrock__region: {{ $config.model.bedrock.region | quote }}
-  {{- end }}
-  {{- else if eq $config.model.provider "openai" }}
-  {{- if $config.model.openai }}
-  {{- if $config.model.openai.base_url }}
-  AGENT_model__openai__base_url: {{ $config.model.openai.base_url | quote }}
-  {{- end }}
-  {{- end }}
-  {{- end }}
+  {{- if $agent.server }}
+  AGENT_SERVER__URL: {{ $agent.server.url | default (printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $ctx) $.Release.Namespace) | quote }}
+  {{- else }}
+  AGENT_SERVER__URL: {{ printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $ctx) $.Release.Namespace | quote }}
   {{- end }}
   {{- if $agent.a2a }}
-  AGENT_A2A__SERVER__url: {{ $agent.a2a.serverUrl | default (printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $ctx) $.Release.Namespace) | quote }}
   {{- $peerUrls := list }}
   {{- if $agent.a2a.peerAgents }}
   {{- range $agent.a2a.peerAgents }}
@@ -48,21 +36,29 @@ data:
   {{- if $peerUrls }}
   AGENT_A2A__PEER_AGENTS: {{ toJson $peerUrls | quote }}
   {{- end }}
-  {{- if $agent.a2a.security }}
-  AGENT_A2A__SECURITY__mode: {{ $agent.a2a.security.mode | quote }}
-  {{- if eq $agent.a2a.security.mode "bearer" }}
-  {{- if $agent.a2a.security.bearer }}
-  AGENT_A2A__SECURITY__bearer__token: {{ $agent.a2a.security.bearer.token | quote }}
   {{- end }}
-  {{- else if eq $agent.a2a.security.mode "oauth" }}
-  {{- if $agent.a2a.security.oauth }}
-  AGENT_A2A__SECURITY__oauth__jwks_url: {{ $agent.a2a.security.oauth.jwks_url | quote }}
-  AGENT_A2A__SECURITY__oauth__audience: {{ $agent.a2a.security.oauth.audience | quote }}
-  AGENT_A2A__SECURITY__oauth__issuer: {{ $agent.a2a.security.oauth.issuer | quote }}
+  {{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt" "mcpServers" "a2a") }}
+  {{- if $config.model }}
+  AGENT_MODEL__PROVIDER: {{ $config.model.provider | quote }}
+  AGENT_MODEL__MODEL_ID: {{ $config.model.model_id | quote }}
+  {{- if eq $config.model.provider "bedrock" }}
+  {{- if $config.model.bedrock }}
+  AGENT_MODEL__BEDROCK__REGION: {{ $config.model.bedrock.region | quote }}
+  {{- end }}
+  {{- else if eq $config.model.provider "openai" }}
+  {{- if $config.model.openai }}
+  {{- if $config.model.openai.base_url }}
+  AGENT_MODEL__OPENAI__BASE_URL: {{ $config.model.openai.base_url | quote }}
   {{- end }}
   {{- end }}
   {{- end }}
-  {{- else }}
-  AGENT_A2A__SERVER__url: {{ printf "http://%s.%s.svc.cluster.local" (include "platform-ai.agentFullname" $ctx) $.Release.Namespace | quote }}
+  {{- end }}
+  {{- if $config.auth }}
+  AGENT_AUTH__MODE: {{ $config.auth.mode | quote }}
+  {{- if eq $config.auth.mode "oidc" }}
+  AGENT_AUTH__OIDC__CONFIGURATION_URL: {{ $config.auth.oidc.configuration_url | quote }}
+  AGENT_AUTH__OIDC__AUDIENCES: {{ toJson $config.auth.oidc.audiences | quote }}
+  AGENT_AUTH__OIDC__CLIENT_ID: {{ $config.auth.oidc.client_id | quote }}
+  {{- end }}
   {{- end }}
 {{- end }}

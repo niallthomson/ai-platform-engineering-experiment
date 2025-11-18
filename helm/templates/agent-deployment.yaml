@@ -1,7 +1,7 @@
-{{- range .Values.agents }}
-{{- $agent := . }}
-{{- $ctx := dict "root" $ "agent" $agent }}
-{{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt") }}
+{{- range $agentId, $agent := .Values.agents }}
+{{- $agentWithId := merge (dict "id" $agentId) $agent }}
+{{- $ctx := dict "root" $ "agent" $agentWithId }}
+{{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agentWithId "name" "description" "system_prompt") }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -10,7 +10,7 @@ metadata:
   labels:
     {{- include "platform-ai.labels" $ | nindent 4 }}
     app.kubernetes.io/type: agent
-    app.kubernetes.io/component: {{ $agent.id }}
+    app.kubernetes.io/component: {{ $agentId }}
 spec:
   {{- if not $config.autoscaling.enabled }}
   replicas: {{ $config.replicas }}
@@ -27,7 +27,7 @@ spec:
       labels:
         {{- include "platform-ai.labels" $ | nindent 8 }}
         app.kubernetes.io/type: agent
-        app.kubernetes.io/component: {{ $agent.id }}
+        app.kubernetes.io/component: {{ $agentId }}
         {{- with $config.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -46,7 +46,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ $agent.id }}
+        - name: {{ $agentId }}
           {{- with $config.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

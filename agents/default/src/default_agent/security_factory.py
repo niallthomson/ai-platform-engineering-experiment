@@ -2,37 +2,48 @@ import logging
 from fastapi import FastAPI
 from a2a.types import SecurityScheme, HTTPAuthSecurityScheme
 from .auth.bearer_auth import BearerAuthMiddleware
-from .auth.oauth_auth import OAuth2JWTAuthMiddleware
-from .config import A2ASecurityConfig
+from .auth.oidc_auth import OIDCJWTAuthMiddleware
+from .config import AuthConfig
 
+logger = logging.getLogger(__name__)
 
-PUBLIC_PATHS = [
-    "/.well-known/agent.json",
-    "/.well-known/agent-card.json",
+BASE_PUBLIC_PATHS = [
+    "/.well-known/*",
     "/health",
     "/ping",
 ]
 
+OIDC_PUBLIC_PATHS = BASE_PUBLIC_PATHS + [
+    "/mcp",
+    "/mcp/*",
+    "/register",
+    "/authorize",
+    "/consent",
+    "/consent/submit",
+    "/auth/callback",
+    "/token",
+]
+
 
 def configure_security(
-    app: FastAPI, config: A2ASecurityConfig
+    app: FastAPI, config: AuthConfig
 ) -> dict[str, SecurityScheme] | None:
     match config.mode:
         case "none":
-            logging.info("Security mode: none")
+            logger.info("Auth mode: none")
             return None
 
         case "bearer":
-            logging.info("Security mode: bearer")
+            logger.info("Auth mode: bearer")
 
             if config.bearer.token is None:
-                logging.error("Bearer token not configured")
+                logger.error("Bearer token not configured")
                 exit(1)
 
             app.add_middleware(
                 BearerAuthMiddleware,  # type: ignore
                 token=config.bearer.token,
-                public_paths=PUBLIC_PATHS,
+                public_paths=BASE_PUBLIC_PATHS,
             )
 
             return {
@@ -44,19 +55,22 @@ def configure_security(
                 )
             }
 
-        case "oauth":
-            logging.info("Security mode: oauth")
+        case "oidc":
+            logger.info("Auth mode: oidc")
+
+            if not config.oidc.configuration_url:
+                logger.error("OIDC configuration_url not configured")
+                exit(1)
 
             app.add_middleware(
-                OAuth2JWTAuthMiddleware,  # type: ignore
-                jwks_url=config.oauth.jwks_url,
-                audience=config.oauth.audience,
-                issuer=config.oauth.issuer,
-                public_paths=PUBLIC_PATHS,
+                OIDCJWTAuthMiddleware,  # type: ignore
+                configuration_url=config.oidc.configuration_url,
+                audiences=config.oidc.audiences,
+                public_paths=OIDC_PUBLIC_PATHS,
             )
 
             return None
 
         case _:
-            logging.error(f"Unknown security mode: {config.mode}")
+            logger.error(f"Unknown auth mode: {config.mode}")
             exit(1)

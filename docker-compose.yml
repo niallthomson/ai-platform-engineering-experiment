@@ -4,10 +4,10 @@ services:
     environment:
       - AGENT_NAME=Platform Agent
       - AGENT_DESCRIPTION=Handles queries related to the internal development platform
-      - AGENT_system_prompt="You are a helpful platform engineer who can answer questions about your companies internal developer platform"
-      - AGENT_A2A__SERVER__host=0.0.0.0
-      - AGENT_A2A__SERVER__url="http://supervisor-agent:9000"
-      - AGENT_A2A__PEER_AGENTS=["http://aws-agent:9000","http://github-agent:9000","http://documentation-agent:9000"]
+      - AGENT_SYSTEM_PROMPT="You are a helpful platform engineer who can answer questions about your companies internal developer platform"
+      - AGENT_SERVER__HOST=0.0.0.0
+      - AGENT_SERVER__URL="http://supervisor-agent:9000"
+      - AGENT_A2A__PEER_AGENTS=["http://aws-agent:9000","http://terraform-agent:9000"]
     ports:
       - "9000:9000"
     healthcheck:
@@ -16,23 +16,16 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
-    depends_on:
-      aws-agent:
-        condition: service_healthy
-      github-agent:
-        condition: service_healthy
-      documentation-agent:
-        condition: service_healthy
 
   aws-agent:
     build: ./agents/default
     environment:
       - AGENT_NAME=AWS Agent
       - AGENT_DESCRIPTION=Agent for answering AWS questions
-      - AGENT_system_prompt="You are a helpful platform engineer who can specifically answer questions about your companies internal developer platform related to Amazon Web Services"
-      - AGENT_A2A__SERVER__host=0.0.0.0
-      - AGENT_A2A__SERVER__url="http://aws-agent:9000"
-      - AGENT_mcp_servers=[{name='AWS Knowledge', url='https://knowledge-mcp.global.api.aws'}]
+      - AGENT_SYSTEM_PROMPT="You are a helpful platform engineer who can specifically answer questions about your companies internal developer platform related to Amazon Web Services"
+      - AGENT_SERVER__HOST=0.0.0.0
+      - AGENT_SERVER__URL="http://aws-agent:9000"
+      - AGENT_MCP_SERVERS=[{name='AWS Knowledge', url='https://knowledge-mcp.global.api.aws'}]
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:9000/health || exit 1']
       interval: 10s
@@ -40,15 +33,15 @@ services:
       retries: 3
     restart: unless-stopped
 
-  github-agent:
+  terraform-agent:
     build: ./agents/default
     environment:
-      - AGENT_NAME=GitHub Agent
-      - AGENT_DESCRIPTION=Agent for answering questions about GitHub repositories
-      - AGENT_system_prompt="You are a helpful platform engineer who can specifically answer questions about your companies internal developer platform related to GitHub."
-      - AGENT_A2A__SERVER__host=0.0.0.0
-      - AGENT_A2A__SERVER__url="http://github-agent:9000"
-      - AGENT_mcp_servers=[{name='GitHub', url='https://api.githubcopilot.com/mcp/readonly', headers={Authorization='Bearer ${GITHUB_TOKEN}'}}]
+      - AGENT_NAME=Terraform Agent
+      - AGENT_DESCRIPTION=Agent for answering questions about Terraform code, providers and modules
+      - AGENT_SYSTEM_PROMPT="You are a helpful platform engineer who can specifically answer questions about Terraform code, providers and modules."
+      - AGENT_SERVER__HOST=0.0.0.0
+      - AGENT_SERVER__URL="http://terraform-agent:9000"
+      - AGENT_MCP_SERVERS=[{name='Wiki', url='http://terraform-mcp:8080/mcp'}]
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:9000/health || exit 1']
       interval: 10s
@@ -56,29 +49,9 @@ services:
       retries: 3
     restart: unless-stopped
 
-  documentation-agent:
-    build: ./agents/default
+  terraform-mcp:
+    image: hashicorp/terraform-mcp-server:0.3.2
     environment:
-      - AGENT_NAME=Documentation Agent
-      - AGENT_DESCRIPTION=Agent that can review the platform documentation to answer questions
-      - AGENT_system_prompt="You are a helpful platform engineer who has detailed access to the documentation for your companies internal developer platform related to GitHub."
-      - AGENT_A2A__SERVER__host=0.0.0.0
-      - AGENT_A2A__SERVER__url="http://github-agent:9000"
-      - AGENT_mcp_servers=[{name='Wiki', url='http://atlassian-mcp:9000/mcp'}]
-    healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:9000/health || exit 1']
-      interval: 10s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    restart: unless-stopped
-
-  atlassian-mcp:
-    image: ghcr.io/sooperset/mcp-atlassian:0.11.8
-    command: --transport streamable-http --port 9000
-    environment:
-      - CONFLUENCE_URL=${CONFLUENCE_URL}
-      - CONFLUENCE_USERNAME=${CONFLUENCE_USERNAME}
-      - CONFLUENCE_API_TOKEN=${CONFLUENCE_TOKEN}
-      - ENABLED_TOOLS=confluence_search,confluence_get_page
+      - TRANSPORT_MODE=streamable-http
+      - TRANSPORT_HOST=0.0.0.0
     restart: unless-stopped

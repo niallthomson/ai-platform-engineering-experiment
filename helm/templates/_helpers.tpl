@@ -125,6 +125,12 @@ Convert MCP servers to Python dict format
     {{- end }}
     {{- $parts = append $parts (printf "headers={%s}" (join ", " $headerParts)) }}
   {{- end }}
+  {{- if .authentication }}
+  {{- $parts = append $parts (printf "authentication='%s'" .authentication) }}
+  {{- end }}
+  {{- if .authentication_header }}
+  {{- $parts = append $parts (printf "authentication_header='%s'" .authentication_header) }}
+  {{- end }}
   {{- $result = append $result (printf "{%s}" (join ", " $parts)) }}
 {{- end }}
 {{- printf "[%s]" (join "," $result) }}

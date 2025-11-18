@@ -28,6 +28,7 @@ from a2a.types import (
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 
+from dataclasses import dataclass
 from strands import Agent as SAAgent
 from strands.agent import AgentResult as SAAgentResult
 from strands.types.content import ContentBlock
@@ -41,6 +42,12 @@ from strands.types.media import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class StrandsAgentInstance:
+    agent: SAAgent
+    invocation_state: dict[str, Any]
 
 
 # Needed due to https://github.com/strands-agents/sdk-python/issues/990
@@ -70,7 +77,7 @@ class StrandsA2AExecutor(AgentExecutor):
 
     def __init__(
         self,
-        agent_generator: Callable[[RequestContext | None], SAAgent],
+        agent_generator: Callable[[RequestContext | None], StrandsAgentInstance],
     ):
         """Initialize a StrandsA2AExecutor.
 
@@ -130,14 +137,19 @@ class StrandsA2AExecutor(AgentExecutor):
         else:
             raise ValueError("No content blocks available")
 
-        agent = self.agent_generator(context)
+        instance = self.agent_generator(context)
+        agent = instance.agent
 
         try:
-            async for event in agent.stream_async(content_blocks):
+            async for event in agent.stream_async(
+                content_blocks, invocation_state=instance.invocation_state
+            ):
                 await self._handle_streaming_event(event, updater)
         except Exception:
             logger.exception("Error in streaming execution")
             raise
+        finally:
+            agent.cleanup()
 
     async def _handle_streaming_event(
         self, event: dict[str, Any], updater: TaskUpdater

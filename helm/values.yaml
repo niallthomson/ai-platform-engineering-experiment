@@ -17,7 +17,7 @@ agentDefaults:
   replicas: 1
 
   secret:
-    create: false
+    create: true
     name: ""
     annotations: {}
     data: {}
@@ -82,6 +82,9 @@ agentDefaults:
       path: /health
       port: http
 
+  auth:
+    mode: bearer
+
   model:
     provider: bedrock
     model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
@@ -132,8 +135,8 @@ mcpServers: []
 
 # Agents
 # NOTE: Any setting from agentDefaults can be overridden per agent
-agents: []
-  # - id: "example-agent"
+agents: {}
+  # example-agent:
   #   # Agent-specific settings (cannot be set in agentDefaults):
   #   name: "Example Agent"
   #   description: |
@@ -152,22 +155,25 @@ agents: []
   #       url: "https://mcp-server.example.com"
   #       headers:
   #         Authorization: "Bearer token"
+  #   server:
+  #     url: ""
   #   a2a:
-  #     serverUrl: ""
   #     # Use peerAgents to reference other agents by ID (URLs auto-generated)
   #     peerAgents:
   #       - "other-agent-id"
   #     # Or use peerAgentUrls for full URLs (external agents)
   #     peerAgentUrls:
   #       - "https://external-agent.example.com"
-  #     security:
-  #       mode: bearer
-  #       bearer:
-  #         token: "your-token"
-  #       # oauth:
-  #       #   jwks_url: "https://idp/oauth2/default/v1/keys"
-  #       #   audience: "audience"
-  #       #   issuer: "https://idp/oauth2/default"
+  #   auth:
+  #     mode: bearer  # or "oidc" or "none"
+  #     bearer:
+  #       token: "your-token"
+  #       oidc:
+  #         configuration_url: "https://auth.example.com/realms/platform/.well-known/openid-configuration"
+  #         client_id: ""
+  #         client_secret: ""
+  #         audiences: 
+  #           - "audience"
 
 # Slack Bot
 slackBot:
@@ -180,13 +186,10 @@ slackBot:
     tag: "latest"
 
   secret:
-    create: false
+    create: true
     name: ""
     annotations: {}
     data: {}
-      # SLACKBOT_slack__bot_token: "xoxb-your-bot-token"
-      # SLACKBOT_slack__app_token: "xapp-your-app-token"
-      # SLACKBOT_a2a__security__bearer__token: "your-api-key"
 
   serviceAccount:
     create: true
@@ -214,12 +217,25 @@ slackBot:
 
   affinity: {}
 
+  botToken: "xoxb-your-bot-token"
+  appToken: "xapp-your-app-token"
+
   a2a:
     # Reference an agent by ID (URL auto-generated)
     agentId: ""
     # Or use a full URL for external agents
     url: ""
-    security:
-      mode: bearer
-      bearer:
-        token: ""
+
+  auth:
+    mode: bearer  # or "oidc"
+    bearer:
+      token: ""
+    # oidc:
+    #   configuration_url: ""
+    #   client_id: ""
+    #   client_secret: ""
+    #   scope: "openid profile email"
+    #   token_store:
+    #     backend: memory  # or "redis"
+    #     redis_url: "redis://localhost:6379"
+    #     key_prefix: "slack_token:"

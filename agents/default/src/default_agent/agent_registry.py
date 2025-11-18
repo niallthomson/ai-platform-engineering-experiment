@@ -8,7 +8,7 @@ from typing_extensions import override
 from jinja2 import Template
 from strands.types.tools import AgentTool, ToolGenerator, ToolSpec, ToolUse
 from strands.types._events import ToolResultEvent
-from a2a.client import A2ACardResolver, ClientConfig, ClientFactory, Client
+from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.client.client_task_manager import ClientTaskManager
 from a2a.types import AgentCard, Message, Part, Role, TextPart, Task, AgentCapabilities
 from a2a.utils.message import get_message_text
@@ -36,15 +36,9 @@ Send natural language messages to this agent. The response includes a contextId 
 logger = logging.getLogger(__name__)
 
 
-class DummyClient:
-    async def send_message(self, msg: Message):
-        raise RuntimeError("Agent is not available")
-
-
 class AgentRegistryEntry:
     url: str
     card: AgentCard
-    client: Client
     resolved: bool
     last_attempt: Optional[datetime]
     error: Optional[str]
@@ -61,7 +55,6 @@ class AgentRegistryEntry:
             skills=[],
             url=url,
         )
-        self.client = DummyClient()  # type: ignore
         self.resolved = False
         self.last_attempt = None
         self.error = None
@@ -88,12 +81,7 @@ class A2AAgentRegistry:
             )
             card = await resolver.get_agent_card()
 
-            config = ClientConfig(httpx_client=self.httpx_client, streaming=False)
-            factory = ClientFactory(config)
-            client = factory.create(card)
-
             entry.card = card
-            entry.client = client
             entry.resolved = True
             entry.error = None
             logger.debug(
@@ -131,7 +119,7 @@ class A2AAgentRegistry:
 
     def get_tools(self) -> list["RegistryAgentTool"]:
         return [
-            RegistryAgentTool(entry.card, entry.client)
+            RegistryAgentTool(entry.card)
             for entry in self.entries.values()
             if entry.resolved
         ]
@@ -152,13 +140,11 @@ class A2AAgentRegistry:
 
 class RegistryAgentTool(AgentTool):
     card: AgentCard
-    client: Client
     tool_id: str
 
-    def __init__(self, card: AgentCard, client: Client):
+    def __init__(self, card: AgentCard):
         super().__init__()
         self.card = card
-        self.client = client
         self.tool_id = uuid4().hex
 
     @property
@@ -201,19 +187,28 @@ class RegistryAgentTool(AgentTool):
     async def stream(
         self, tool_use: ToolUse, invocation_state: dict[str, Any], **kwargs: Any
     ) -> ToolGenerator:
-        msg = Message(
-            kind="message",
-            role=Role.user,
-            parts=[Part(TextPart(kind="text", text=tool_use["input"]["message"]))],
-            message_id=uuid4().hex,
-            context_id=tool_use["input"].get("contextId"),
-        )
+        headers = {}
+        if "authorization_header" in invocation_state:
+            headers["Authorization"] = invocation_state["authorization_header"]
 
-        task_manager = ClientTaskManager()
-        last_message: Message | None = None
-
+        httpx_client = httpx.AsyncClient(timeout=120, headers=headers)
         try:
-            async for event in self.client.send_message(msg):
+            config = ClientConfig(httpx_client=httpx_client, streaming=False)
+            factory = ClientFactory(config)
+            client = factory.create(self.card)
+
+            msg = Message(
+                kind="message",
+                role=Role.user,
+                parts=[Part(TextPart(kind="text", text=tool_use["input"]["message"]))],
+                message_id=uuid4().hex,
+                context_id=tool_use["input"].get("contextId"),
+            )
+
+            task_manager = ClientTaskManager()
+            last_message: Message | None = None
+
+            async for event in client.send_message(msg):
                 if isinstance(event, tuple):
                     event = event[0]
                 await task_manager.process(event)
@@ -251,6 +246,8 @@ class RegistryAgentTool(AgentTool):
                     "content": [{"text": f"Error: {e}"}],
                 }
             )
+        finally:
+            await httpx_client.aclose()
 
     def _extract_text(self, obj: Task | Message | None) -> str:
         if not obj:

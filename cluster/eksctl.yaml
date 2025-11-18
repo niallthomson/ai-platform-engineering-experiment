@@ -1,0 +1,43 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: platform-ai
+  region: us-west-2
+
+autoModeConfig:
+  enabled: true
+  nodePools: [general-purpose, system]
+
+iam:
+  podIdentityAssociations:
+  - namespace: default
+    serviceAccountName: platform-ai-agent-platform
+    permissionPolicy:
+      Version: "2012-10-17"
+      Statement:
+      - Effect: Allow
+        Action:
+        - "bedrock:InvokeModel"
+        - "bedrock:InvokeModelWithResponseStream"
+        Resource: '*'
+  - namespace: default
+    serviceAccountName: platform-ai-agent-aws
+    permissionPolicy:
+      Version: "2012-10-17"
+      Statement:
+      - Effect: Allow
+        Action:
+        - "bedrock:InvokeModel"
+        - "bedrock:InvokeModelWithResponseStream"
+        Resource: '*'
+  - namespace: default
+    serviceAccountName: platform-ai-agent-terraform
+    permissionPolicy:
+      Version: "2012-10-17"
+      Statement:
+      - Effect: Allow
+        Action:
+        - "bedrock:InvokeModel"
+        - "bedrock:InvokeModelWithResponseStream"
+        Resource: '*'
