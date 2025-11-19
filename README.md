@@ -10,6 +10,7 @@ Objectives:
 - OIDC or shared key authentication with identity passed between agents
 - Simple Slack bot to interface with A2A agents, also supports OIDC via device auth flow
 - Runnable in Docker, Kubernetes or AWS Agentcore
+- Emits OpenTelemetry traces
 
 Working on:
 

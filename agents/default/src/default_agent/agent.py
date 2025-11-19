@@ -1,5 +1,11 @@
+from .disable_a2a_tracing import disable_a2a_tracing
+
+disable_a2a_tracing()
+
+# ruff: noqa: E402
 import asyncio
 import logging
+import os
 from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +27,14 @@ import uvicorn
 from a2a.server.agent_execution import RequestContext
 from uvicorn.config import LOGGING_CONFIG
 from typing import Any
+from strands.telemetry import StrandsTelemetry
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+if "OTEL_EXPORTER_OTLP_ENDPOINT" in os.environ:
+    strands_telemetry = StrandsTelemetry()
+    strands_telemetry.setup_otlp_exporter()  # Send traces to OTLP endpoint
+    # strands_telemetry.setup_console_exporter()  # Print traces to console
+    strands_telemetry.setup_meter(enable_otlp_exporter=True)
 
 format_prefix = "%(levelname)s | %(name)s |"
 format = "{} %(message)s".format(format_prefix)
@@ -35,7 +49,7 @@ LOGGING_CONFIG["formatters"]["access"]["fmt"] = (
 logger = logging.getLogger(__name__)
 
 
-@tool(context=True)
+@tool(context=True, description="Provides the username of the caller.")
 def get_user_name(tool_context: ToolContext) -> str:
     return tool_context.agent.state.get("username")
 
@@ -54,6 +68,7 @@ async def run(loop):
         invocation_state: dict[str, Any] = {}
         session_manager: SessionManager | None = None
         state = {"username": "unknown"}
+        trace_attributes = {}
 
         authorization_header: str | None = None
 
@@ -66,7 +81,12 @@ async def run(loop):
                 session_manager = FileSessionManager(session_id=context_id)
 
             if context.call_context is not None:
-                state["username"] = context.call_context.user.user_name
+                if context.call_context.user.is_authenticated:
+                    state["username"] = context.call_context.user.user_name
+                else:
+                    state["username"] = "unknown"
+
+                trace_attributes["user.id"] = state["username"]
 
                 call_headers = context.call_context.state["headers"]
 
@@ -112,6 +132,7 @@ async def run(loop):
                 callback_handler=None,
                 session_manager=session_manager,
                 state=state,
+                trace_attributes=trace_attributes,
             ),
             invocation_state,
         )
@@ -120,6 +141,7 @@ async def run(loop):
     mcp_app = None
 
     if config.mcp.enabled:
+        logger.info("MCP enabled")
         mcp_app = create_mcp_server(config, agent_generator)
         lifespan = mcp_app.lifespan
 
@@ -177,6 +199,11 @@ async def run(loop):
         host=config.server.host,
         port=config.server.port,
         ws="websockets-sansio",
+    )
+
+    FastAPIInstrumentor.instrument_app(
+        app,
+        excluded_urls=".well-known/*,/mcp*,/register,/authorize,/consent,/consent/submit,/auth/callback,/token",
     )
 
     uvicorn_server = uvicorn.Server(uvicorn_config)

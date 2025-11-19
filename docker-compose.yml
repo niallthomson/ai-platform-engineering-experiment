@@ -6,7 +6,7 @@ services:
       - AGENT_DESCRIPTION=Handles queries related to the internal development platform
       - AGENT_SYSTEM_PROMPT="You are a helpful platform engineer who can answer questions about your companies internal developer platform"
       - AGENT_SERVER__HOST=0.0.0.0
-      - AGENT_SERVER__URL="http://supervisor-agent:9000"
+      - AGENT_SERVER__URL="http://localhost:9000"
       - AGENT_A2A__PEER_AGENTS=["http://aws-agent:9000","http://terraform-agent:9000"]
     ports:
       - "9000:9000"

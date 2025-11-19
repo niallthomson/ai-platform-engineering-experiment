@@ -12,6 +12,8 @@ from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.client.client_task_manager import ClientTaskManager
 from a2a.types import AgentCard, Message, Part, Role, TextPart, Task, AgentCapabilities
 from a2a.utils.message import get_message_text
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.baggage.propagation import W3CBaggagePropagator
 
 DESCRIPTION_TEMPLATE = Template(
     """
@@ -188,6 +190,9 @@ class RegistryAgentTool(AgentTool):
         self, tool_use: ToolUse, invocation_state: dict[str, Any], **kwargs: Any
     ) -> ToolGenerator:
         headers = {}
+        W3CBaggagePropagator().inject(headers)
+        TraceContextTextMapPropagator().inject(headers)
+
         if "authorization_header" in invocation_state:
             headers["Authorization"] = invocation_state["authorization_header"]
 
