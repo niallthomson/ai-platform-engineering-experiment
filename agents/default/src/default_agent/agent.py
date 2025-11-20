@@ -2,31 +2,27 @@ from .disable_a2a_tracing import disable_a2a_tracing
 
 disable_a2a_tracing()
 
+from strands.tools.mcp.mcp_instrumentation import mcp_instrumentation
+
+mcp_instrumentation()
+
 # ruff: noqa: E402
 import asyncio
 import logging
 import os
-from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mcp.client.streamable_http import streamablehttp_client
-from strands import tool, Agent, ToolContext
-from strands.tools.mcp import MCPClient
 from .server import A2AServer
-from strands.experimental.tools import ToolProvider
-from strands.session import SessionManager
-from strands.session.file_session_manager import FileSessionManager
 from a2a.types import AgentSkill
 from .config import createConfig
 from .agent_registry import A2AAgentRegistry
-from .model_factory import create_model
 from .security_factory import configure_security
+from default_agent.agent_factory import build_agent
 from .mcp_factory import create_mcp_server
 from .executor import StrandsAgentInstance
 import uvicorn
 from a2a.server.agent_execution import RequestContext
 from uvicorn.config import LOGGING_CONFIG
-from typing import Any
 from strands.telemetry import StrandsTelemetry
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
@@ -49,100 +45,39 @@ LOGGING_CONFIG["formatters"]["access"]["fmt"] = (
 logger = logging.getLogger(__name__)
 
 
-@tool(context=True, description="Provides the username of the caller.")
-def get_user_name(tool_context: ToolContext) -> str:
-    return tool_context.agent.state.get("username")
-
-
 async def run(loop):
     config = createConfig("agent_config.yaml")
 
     logger.info(f"Starting agent: {config.name}")
 
-    model = create_model(config.model)
-
     registry = A2AAgentRegistry(agent_urls=config.a2a.peer_agents, refresh_interval=60)
     await registry.start()
 
     def agent_generator(context: RequestContext | None) -> StrandsAgentInstance:
-        invocation_state: dict[str, Any] = {}
-        session_manager: SessionManager | None = None
-        state = {"username": "unknown"}
-        trace_attributes = {}
-
         authorization_header: str | None = None
-
-        # Workaround until this issue is resolved: https://github.com/modelcontextprotocol/python-sdk/issues/1509
-        mcp_tools: List[ToolProvider] = []
+        username: str | None = None
+        context_id: str | None = None
 
         if context is not None:
             if context.context_id is not None:
                 context_id = context.context_id
-                session_manager = FileSessionManager(session_id=context_id)
 
             if context.call_context is not None:
                 if context.call_context.user.is_authenticated:
-                    state["username"] = context.call_context.user.user_name
-                else:
-                    state["username"] = "unknown"
-
-                trace_attributes["user.id"] = state["username"]
+                    username = context.call_context.user.user_name
 
                 call_headers = context.call_context.state["headers"]
 
                 authorization_header = call_headers.get("authorization", None)
 
-            token: str | None = None
-
-            if authorization_header is not None:
-                invocation_state["authorization_header"] = authorization_header
-                token = authorization_header.split(" ", 1)[1]
-
-            for server in config.mcp_servers:
-                logger.debug(f"Configuring MCP server: {server.name} -> {server.url}")
-
-                additional_headers = {}
-
-                if (
-                    server.authentication == "passthrough"
-                    and authorization_header is not None
-                ):
-                    if server.authentication_header is None:
-                        additional_headers["Authorization"] = authorization_header
-                    else:
-                        additional_headers[server.authentication_header] = token
-
-                mcp_client = MCPClient(
-                    lambda: streamablehttp_client(
-                        url=server.url,
-                        headers=server.headers | additional_headers,
-                    ),
-                )
-                mcp_tools.append(mcp_client)
-
-        agent_tools = mcp_tools + registry.get_tools() + [get_user_name]
-
-        return StrandsAgentInstance(
-            Agent(
-                name=config.name,
-                description=config.description,
-                model=model,
-                tools=agent_tools,
-                system_prompt=config.system_prompt,
-                callback_handler=None,
-                session_manager=session_manager,
-                state=state,
-                trace_attributes=trace_attributes,
-            ),
-            invocation_state,
-        )
+        return build_agent(config, registry, context_id, authorization_header, username)
 
     lifespan = None
     mcp_app = None
 
     if config.mcp.enabled:
         logger.info("MCP enabled")
-        mcp_app = create_mcp_server(config, agent_generator)
+        mcp_app = create_mcp_server(config, registry)
         lifespan = mcp_app.lifespan
 
     app = FastAPI(lifespan=lifespan)
@@ -203,7 +138,8 @@ async def run(loop):
 
     FastAPIInstrumentor.instrument_app(
         app,
-        excluded_urls=".well-known/*,/mcp*,/register,/authorize,/consent,/consent/submit,/auth/callback,/token",
+        excluded_urls="/health,.well-known/*,/mcp*,/register,/authorize,/consent,/consent/submit,/auth/callback,/token",
+        exclude_spans=["receive", "send"],
     )
 
     uvicorn_server = uvicorn.Server(uvicorn_config)

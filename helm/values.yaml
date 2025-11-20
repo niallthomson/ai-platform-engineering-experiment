@@ -85,6 +85,9 @@ agentDefaults:
   auth:
     mode: bearer
 
+  mcp:
+    enabled: false
+
   model:
     provider: bedrock
     model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
@@ -92,6 +95,11 @@ agentDefaults:
       region: us-west-2
     openai:
       base_url: ""
+
+  opentelemetry:
+    endpoint: ""
+    token: ""
+
 
 # MCP Servers
 mcpServers: []

@@ -38,6 +38,9 @@ data:
   {{- end }}
   {{- end }}
   {{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt" "mcpServers" "a2a") }}
+  {{- if $config.mcp.enabled }}
+  AGENT_MCP__ENABLED: "true"
+  {{- end }}
   {{- if $config.model }}
   AGENT_MODEL__PROVIDER: {{ $config.model.provider | quote }}
   AGENT_MODEL__MODEL_ID: {{ $config.model.model_id | quote }}
@@ -60,5 +63,8 @@ data:
   AGENT_AUTH__OIDC__AUDIENCES: {{ toJson $config.auth.oidc.audiences | quote }}
   AGENT_AUTH__OIDC__CLIENT_ID: {{ $config.auth.oidc.client_id | quote }}
   {{- end }}
+  {{- end }}
+  {{- if ne $.Values.agentDefaults.opentelemetry.endpoint "" }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ $.Values.agentDefaults.opentelemetry.endpoint | quote }}
   {{- end }}
 {{- end }}
