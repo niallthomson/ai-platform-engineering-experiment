@@ -40,6 +40,7 @@ from strands.types.media import (
     VideoContent,
     VideoSource,
 )
+from strands.hooks import BeforeToolCallEvent, AfterToolCallEvent
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,31 @@ class StrandsA2AExecutor(AgentExecutor):
 
         instance = self.agent_generator(context)
         agent = instance.agent
+
+        async def tool_start_callback(
+            event: BeforeToolCallEvent | AfterToolCallEvent,
+        ) -> None:
+            if event.selected_tool is not None:
+                event_type = (
+                    "start" if isinstance(event, BeforeToolCallEvent) else "end"
+                )
+
+                description = ""
+
+                if event_type == "start":
+                    description = f"Starting tool call: {event.selected_tool.tool_name}"
+                else:
+                    description = (
+                        f"Completed tool call: {event.selected_tool.tool_name}"
+                    )
+
+                await updater.add_artifact(
+                    name="tool_invocation_update",
+                    parts=[Part(root=TextPart(text=description))],
+                )
+
+        agent.hooks.add_callback(BeforeToolCallEvent, tool_start_callback)
+        agent.hooks.add_callback(AfterToolCallEvent, tool_start_callback)
 
         try:
             async for event in agent.stream_async(

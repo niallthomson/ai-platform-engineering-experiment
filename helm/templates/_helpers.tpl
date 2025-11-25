@@ -131,6 +131,21 @@ Convert MCP servers to Python dict format
   {{- if .authentication_header }}
   {{- $parts = append $parts (printf "authentication_header='%s'" .authentication_header) }}
   {{- end }}
+  {{- if .tools }}
+    {{- $toolParts := list }}
+    {{- if .tools.allowed }}
+      {{- $toolParts = append $toolParts (printf "allowed=%s" (toJson .tools.allowed)) }}
+    {{- end }}
+    {{- if .tools.rejected }}
+      {{- $toolParts = append $toolParts (printf "rejected=%s" (toJson .tools.rejected)) }}
+    {{- end }}
+    {{- if .tools.prefix }}
+      {{- $toolParts = append $toolParts (printf "prefix='%s'" .tools.prefix) }}
+    {{- end }}
+    {{- if $toolParts }}
+      {{- $parts = append $parts (printf "tools={%s}" (join ", " $toolParts)) }}
+    {{- end }}
+  {{- end }}
   {{- $result = append $result (printf "{%s}" (join ", " $parts)) }}
 {{- end }}
 {{- printf "[%s]" (join "," $result) }}

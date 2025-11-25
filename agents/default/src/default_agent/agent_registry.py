@@ -71,7 +71,9 @@ class A2AAgentRegistry:
 
     def __init__(self, agent_urls: list[str], refresh_interval: int = 60):
         self.entries = {url: AgentRegistryEntry(url) for url in agent_urls}
-        self.httpx_client = httpx.AsyncClient(timeout=120)
+        self.httpx_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+        )
         self.refresh_interval = refresh_interval
         self._refresh_task = None
         self._running = False
@@ -196,7 +198,10 @@ class RegistryAgentTool(AgentTool):
         if "authorization_header" in invocation_state:
             headers["Authorization"] = invocation_state["authorization_header"]
 
-        httpx_client = httpx.AsyncClient(timeout=120, headers=headers)
+        httpx_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0),
+            headers=headers
+        )
         try:
             config = ClientConfig(httpx_client=httpx_client, streaming=False)
             factory = ClientFactory(config)

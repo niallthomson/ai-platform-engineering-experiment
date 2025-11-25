@@ -113,11 +113,26 @@ export SLACKBOT_AUTH_OIDC_SCOPE="openid profile email"
 
 **In-Memory (Default):** Tokens stored in process memory. Simple but not suitable for multi-instance deployments.
 
-**Redis:** Tokens stored in Redis for production and multi-instance deployments. Requires `redis` package.
+**Redis:** Tokens stored in Redis for production and multi-instance deployments. Requires `redis` and `cryptography` packages. Encryption is required for Redis backend.
 
 ```yaml
 token_store:
   backend: redis
-  redis_url: redis://localhost:6379
-  key_prefix: "slack_token:"
+  redis:
+    url: redis://localhost:6379
+    key_prefix: "slack_token:"
+  encryption_key: "your-fernet-key-here"  # Required for redis backend
+```
+
+**Generate encryption key:**
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+**Environment variables:**
+```bash
+export SLACKBOT_AUTH_OIDC_TOKEN_STORE_BACKEND="redis"
+export SLACKBOT_AUTH_OIDC_TOKEN_STORE_REDIS_URL="redis://localhost:6379"
+export SLACKBOT_AUTH_OIDC_TOKEN_STORE_REDIS_KEY_PREFIX="slack_token:"
+export SLACKBOT_AUTH_OIDC_TOKEN_STORE_ENCRYPTION_KEY="your-fernet-key-here"
 ```

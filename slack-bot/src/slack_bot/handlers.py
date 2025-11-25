@@ -6,6 +6,7 @@ from uuid import uuid4
 import httpx
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
+from slack_sdk.web.chat_stream import ChatStream
 
 from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.client.client_task_manager import ClientTaskManager
@@ -34,8 +35,8 @@ def _parse_response_text(response_obj: Task | Message | None) -> str:
 
 
 async def call_agent(
-    endpoint: str, user_input: str, api_key: str = "", context_id: str | None = None
-) -> tuple[str, str | None]:
+    streamer: ChatStream, endpoint: str, user_input: str, api_key: str = "", context_id: str | None = None
+) -> str | None:
     """Execute A2A agent call and return response text and context_id."""
     http_client = httpx.AsyncClient(
         timeout=600,
@@ -45,47 +46,58 @@ async def call_agent(
     card_resolver = A2ACardResolver(httpx_client=http_client, base_url=endpoint)
     agent_card = await card_resolver.get_agent_card()
 
-    client_config = ClientConfig(httpx_client=http_client, streaming=False)
+    client_config = ClientConfig(httpx_client=http_client, streaming=True)
     client = ClientFactory(client_config).create(agent_card)
 
-    formatted_input = f"{user_input}\n\nNote: Format your response using Slack mrkdwn syntax, not standard Markdown. Use *bold* for bold text, _italic_ for italic text, and `code` for inline code. If a downstream agent responds with Markdown then reformat it."
+    #formatted_input = f"{user_input}\n\nNote: Format your response using Slack mrkdwn syntax, not standard Markdown. Use *bold* for bold text, _italic_ for italic text, and `code` for inline code. If a downstream agent responds with Markdown then reformat it. Alter Markdown links to use the format: <http://www.example.com|This message *is* a link>"
 
     user_message = Message(
         kind="message",
         role=Role.user,
-        parts=[Part(TextPart(kind="text", text=formatted_input))],
+        parts=[Part(TextPart(kind="text", text=user_input))],
         message_id=uuid4().hex,
         context_id=context_id,
     )
 
     logger.debug("Calling A2A agent at: %s with context_id: %s", endpoint, context_id)
 
-    task_mgr = ClientTaskManager()
     final_message: Message | None = None
+    last_message_id = ""
+    last_artifact_id = ""
 
     async for evt in client.send_message(user_message):
         if isinstance(evt, tuple):
             evt = evt[0]
-        await task_mgr.process(evt)
-        if isinstance(evt, Message):
-            final_message = evt
 
-    result_task = task_mgr.get_task()
+        if isinstance(evt, Task):
+            if evt.history is not None and len(evt.history) > 1:
+                final_message = evt.history[-1]
+                
+                if final_message.message_id != last_message_id:
+                    last_message_id = final_message.message_id
+                    message_text = get_message_text(final_message)
+                    
+                    await streamer.append(markdown_text=f"{message_text}") # type: ignore
+                    
+            if evt.artifacts is not None and len(evt.artifacts) > 0:
+                last_artifact = evt.artifacts[-1]
 
-    response_message = ""
+                if last_artifact.artifact_id != last_artifact_id:
+                    last_artifact_id = last_artifact.artifact_id
+
+                    if last_artifact.name == "tool_invocation_update":
+                        await streamer.append(markdown_text="\n\n") # type: ignore
+                        await streamer._flush_buffer() # type: ignore
+
     response_context_id = ""
-
-    if result_task:
-        response_message = _parse_response_text(result_task)
-        response_context_id = result_task.context_id
-    elif final_message is not None:
-        response_message = _parse_response_text(final_message)
+    
+    if final_message is not None:
         response_context_id = final_message.context_id
     else:
         raise RuntimeError("No response from agent")
 
     await http_client.aclose()
-    return response_message, response_context_id if context_id is None else None
+    return response_context_id if context_id is None else None
 
 
 async def send_agent_response(
@@ -94,8 +106,8 @@ async def send_agent_response(
     query: str,
     user: str,
     agent_url: str,
+    thread_ts: str,
     api_key: str = "",
-    thread_ts: str | None = None,
     auth_manager=None,
 ):
     """Send query to agent and post response to channel."""
@@ -117,10 +129,15 @@ async def send_agent_response(
     # Retrieve existing context_id for this channel/thread
     context_key = f"{cid}:{thread_ts}" if thread_ts else cid
     context_id = context_store.get(context_key)
+    
+    streamer = await client.chat_stream(
+        channel=cid,
+        thread_ts=thread_ts,
+    ) # type: ignore
 
     try:
-        agent_response, new_context_id = await call_agent(
-            agent_url, query, api_key, context_id
+        new_context_id = await call_agent(
+            streamer, agent_url, query, api_key, context_id
         )
 
         # Store the new context_id for this channel/thread
@@ -129,24 +146,6 @@ async def send_agent_response(
             logger.debug("Stored context_id %s for key %s", new_context_id, context_key)
         else:
             logger.debug("Re-used context_id %s for key %s", context_id, context_key)
-
-        if agent_response and agent_response.strip():
-            blocks = [
-                {"type": "section", "text": {"type": "mrkdwn", "text": agent_response}},
-            ]
-
-            await client.chat_postMessage(
-                channel=cid,
-                blocks=blocks,
-                text=f"AI Agent Response: {agent_response[:100]}..."
-                if len(agent_response) > 100
-                else f"AI Agent Response: {agent_response}",
-                thread_ts=thread_ts,
-            )  # pyright: ignore[reportGeneralTypeIssues]
-        else:
-            await client.chat_postMessage(
-                channel=cid, text="Agent returned no response.", thread_ts=thread_ts
-            )  # pyright: ignore[reportGeneralTypeIssues]
     except Exception as err:
         logger.error("Agent invocation failed: %s", err)
         await client.chat_postMessage(
@@ -154,6 +153,8 @@ async def send_agent_response(
             text="❌ Error: There was an issue processing your request, please contact your administrator",
             thread_ts=thread_ts,
         )  # pyright: ignore[reportGeneralTypeIssues]
+    finally:
+        await streamer.stop()
 
 
 def setup_handlers(
@@ -177,6 +178,8 @@ def setup_handlers(
                         channel=cid, text="No active conversation context to reset."
                     )  # pyright: ignore[reportGeneralTypeIssues]
                 return
+            
+            thread_ts = event.get("thread_ts") or event.get("ts")
 
             await send_agent_response(
                 client,
@@ -184,6 +187,7 @@ def setup_handlers(
                 event["text"],
                 event["user"],
                 agent_url,
+                thread_ts,
                 api_key,
                 auth_manager=auth_manager,
             )
@@ -207,8 +211,8 @@ def setup_handlers(
             query,
             event["user"],
             agent_url,
+            thread_ts,
             api_key,
-            thread_ts=thread_ts,
             auth_manager=auth_manager,
         )
 

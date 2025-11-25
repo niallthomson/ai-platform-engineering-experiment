@@ -35,13 +35,15 @@ data:
   {{- end }}
   {{- if .Values.slackBot.auth.oidc.token_store }}
   {{- if .Values.slackBot.auth.oidc.token_store.backend }}
-  SLACKBOT_AUTH__OIDC__TOKEN_STORE_BACKEND: {{ .Values.slackBot.auth.oidc.token_store.backend | quote }}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE__BACKEND: {{ .Values.slackBot.auth.oidc.token_store.backend | quote }}
   {{- end }}
-  {{- if .Values.slackBot.auth.oidc.token_store.redis_url }}
-  SLACKBOT_AUTH__OIDC__TOKEN_STORE_REDIS_URL: {{ .Values.slackBot.auth.oidc.token_store.redis_url | quote }}
+  {{- if .Values.slackBot.auth.oidc.token_store.redis }}
+  {{- if .Values.slackBot.auth.oidc.token_store.redis.url }}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE__REDIS__URL: {{ .Values.slackBot.auth.oidc.token_store.redis.url | quote }}
   {{- end }}
-  {{- if .Values.slackBot.auth.oidc.token_store.key_prefix }}
-  SLACKBOT_AUTH__OIDC__TOKEN_STORE_KEY_PREFIX: {{ .Values.slackBot.auth.oidc.token_store.key_prefix | quote }}
+  {{- if .Values.slackBot.auth.oidc.token_store.redis.key_prefix }}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE__REDIS__KEY_PREFIX: {{ .Values.slackBot.auth.oidc.token_store.redis.key_prefix | quote }}
+  {{- end }}
   {{- end }}
   {{- end }}
   {{- end }}

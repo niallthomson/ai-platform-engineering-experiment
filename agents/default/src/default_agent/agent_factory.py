@@ -1,10 +1,11 @@
 import logging
-from typing import List
+from typing import List, Sequence
 from default_agent.agent_registry import A2AAgentRegistry
 from default_agent.model_factory import create_model
 from mcp.client.streamable_http import streamablehttp_client
 from strands import Agent, ToolContext, tool
 from strands.tools.mcp import MCPClient
+from strands.types.tools import AgentTool
 from strands.experimental.tools import ToolProvider
 from strands.session import SessionManager
 from strands.session.file_session_manager import FileSessionManager
@@ -60,13 +61,45 @@ def build_agent(
             else:
                 additional_headers[server.authentication_header] = token
 
+        url = server.url
+        headers = server.headers | additional_headers
+
+        def allowed_tools(
+            tool: AgentTool,
+            allowed=server.tools.allowed,
+            **_: Any,
+        ) -> bool:
+            if len(allowed) == 0:
+                return True
+
+            is_allowed = tool.tool_name in allowed
+
+            if is_allowed:
+                logger.info(f"Allowed tool {tool.tool_name}")
+
+            return is_allowed
+
+        def rejected_tools(
+            tool: AgentTool,
+            rejected=server.tools.rejected,
+            **_: Any,
+        ) -> bool:
+            is_rejected = tool.tool_name in rejected
+
+            if is_rejected:
+                logger.info(f"Rejected tool {tool.tool_name}")
+
+            return is_rejected
+
         mcp_client = MCPClient(
-            lambda: streamablehttp_client(
-                url=server.url,
-                headers=server.headers | additional_headers,
+            lambda url=url, headers=headers: streamablehttp_client(
+                url=url,
+                headers=headers,
             ),
+            tool_filters={"allowed": [allowed_tools], "rejected": [rejected_tools]},
+            prefix=server.tools.prefix,
         )
-        mcp_tools.append(mcp_client)
+        mcp_tools.append(ForgivingToolProvider(mcp_client))
 
     agent_tools = mcp_tools + registry.get_tools() + [get_user_name]
 
@@ -84,3 +117,22 @@ def build_agent(
         ),
         invocation_state,
     )
+
+
+class ForgivingToolProvider(ToolProvider):
+    def __init__(self, inner: ToolProvider) -> None:
+        super().__init__()
+        self.inner = inner
+
+    async def load_tools(self, **kwargs: Any) -> Sequence["AgentTool"]:
+        try:
+            return await self.inner.load_tools(**kwargs)
+        except Exception as e:
+            logger.error(f"Failed to load tools: {e}")
+            return []
+
+    def add_consumer(self, consumer_id: Any, **kwargs: Any) -> None:
+        self.inner.add_consumer(consumer_id, **kwargs)
+
+    def remove_consumer(self, consumer_id: Any, **kwargs: Any) -> None:
+        self.inner.remove_consumer(consumer_id, **kwargs)

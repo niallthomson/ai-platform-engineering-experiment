@@ -1,4 +1,3 @@
-import json
 import logging
 from default_agent.agent_registry import A2AAgentRegistry
 from fastmcp import FastMCP, Context
@@ -7,8 +6,8 @@ from .config import AgentConfig
 from opentelemetry import trace
 from uuid import uuid4
 import httpx
-from a2a.utils.parts import get_text_parts
-from a2a.client import A2ACardResolver, ClientConfig, ClientFactory, Client
+from a2a.utils.message import get_message_text
+from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.types import Message, Part, Role, TextPart, Task, AgentCard
 from fastmcp.server.dependencies import get_access_token
 from opentelemetry.propagate import inject
@@ -52,6 +51,15 @@ def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
     base_url = config.server.url or f"http://127.0.0.1:{config.server.port}"
 
     if config.auth.mode == "oidc":
+        if not config.auth.oidc.configuration_url:
+            raise ValueError(
+                "OIDC configuration_url is required when auth mode is 'oidc'"
+            )
+        if not config.auth.oidc.client_id:
+            raise ValueError("OIDC client_id is required when auth mode is 'oidc'")
+        if not config.auth.oidc.client_secret:
+            raise ValueError("OIDC client_secret is required when auth mode is 'oidc'")
+
         mcp_auth = OIDCProxy(
             config_url=config.auth.oidc.configuration_url,
             client_id=config.auth.oidc.client_id,
@@ -64,7 +72,7 @@ def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
     resolver = AgentCardResolver(config, base_url)
     mcp = FastMCP(name=config.name, auth=mcp_auth)
 
-    @mcp.tool(description="Send a natural language question to the agent")
+    @mcp.tool(description=config.description)
     async def query(query: str, ctx: Context) -> str:
         headers: dict[str, str] = {}
 
@@ -88,7 +96,7 @@ def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
             httpx_client = httpx.AsyncClient(timeout=120, headers=headers)
 
             try:
-                config = ClientConfig(httpx_client=httpx_client, streaming=False)
+                config = ClientConfig(httpx_client=httpx_client, streaming=True)
                 factory = ClientFactory(config)
 
                 client = factory.create(card)
@@ -101,21 +109,59 @@ def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
                     context_id=None,
                 )
 
-                output = ""
+                last_message: Task | Message | None = None
+                last_artifact_id = ""
+                progress_counter = 0
 
                 async for event in client.send_message(msg):
                     if isinstance(event, tuple):
                         event = event[0]
 
-                    if isinstance(event, Task) and event.artifacts:
-                        artifact = event.artifacts[-1]
+                    if isinstance(event, Task):
+                        if event.artifacts is not None and len(event.artifacts) > 0:
+                            last_artifact = event.artifacts[-1]
 
-                        output = "\n".join(get_text_parts(artifact.parts))
+                            if last_artifact.artifact_id != last_artifact_id:
+                                last_artifact_id = last_artifact.artifact_id
 
-                return output
+                                if last_artifact.name == "tool_invocation_update":
+                                    progress_counter += 1
+                                    description = (
+                                        last_artifact.parts[0].root.text  # type: ignore
+                                        if last_artifact.parts
+                                        else ""
+                                    )
+                                    await ctx.report_progress(
+                                        progress=progress_counter, message=description
+                                    )
+
+                    last_message = event
+
+                message = (
+                    extract_text(last_message)
+                    if last_message
+                    else (extract_text(last_message) if last_message else "")
+                )
+
+                return message
+
             except Exception as e:
                 logger.error(f"Error in tool: {e}")
 
             return "An error occurred"
 
     return mcp.http_app("/mcp")
+
+
+def extract_text(obj: Task | Message | None) -> str:
+    if not obj:
+        return ""
+    if isinstance(obj, Message):
+        return get_message_text(obj)
+    if isinstance(obj, Task) and obj.artifacts:
+        for artifact in reversed(obj.artifacts):
+            if artifact.parts:
+                for part in reversed(artifact.parts):
+                    if hasattr(part, "root") and hasattr(part.root, "text"):
+                        return part.root.text  # type: ignore
+    return ""

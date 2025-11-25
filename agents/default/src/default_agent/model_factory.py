@@ -2,6 +2,7 @@ import logging
 from strands.models import Model, BedrockModel
 from strands.models.openai import OpenAIModel
 from .config import ModelConfig
+from botocore.config import Config as BotocoreConfig
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,15 @@ def create_model(config: ModelConfig) -> Model:
         case "bedrock":
             logger.info(f"Bedrock region: {config.bedrock.region}")
 
+            boto_config = BotocoreConfig(
+                retries={"max_attempts": 5, "mode": "standard"},
+            )
+
             return BedrockModel(
                 model_id=config.model_id,
                 temperature=config.temperature,
-                top_p=config.temperature,
                 region_name=config.bedrock.region,
+                boto_client_config=boto_config,
             )
 
         case "openai":

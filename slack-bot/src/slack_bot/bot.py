@@ -12,7 +12,7 @@ from .config import createConfig
 from .handlers import setup_handlers
 from .auth_manager import AuthManager
 from .oidc_device_flow import OIDCDeviceFlow
-from .token_store import InMemoryTokenStore, RedisTokenStore
+from .token_store import InMemoryTokenStore, RedisTokenStore, FernetEncryptionProvider
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
 
@@ -38,10 +38,11 @@ async def create_token_store(token_store_config):
     if token_store_config.backend == "redis":
         try:
             import redis.asyncio as redis
-            client = redis.from_url(token_store_config.redis_url)
+            client = redis.from_url(token_store_config.redis.url)
             await client.ping()
-            logger.info("Using Redis token store at %s", token_store_config.redis_url)
-            return RedisTokenStore(client, token_store_config.key_prefix)
+            encryption = FernetEncryptionProvider(token_store_config.encryption_key.encode())
+            logger.info("Using Redis token store at %s with encryption", token_store_config.redis.url)
+            return RedisTokenStore(client, encryption, token_store_config.redis.key_prefix)
         except ImportError:
             logger.error("Redis backend requested but redis package not installed")
             raise

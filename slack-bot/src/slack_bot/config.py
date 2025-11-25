@@ -28,21 +28,32 @@ class BearerAuthConfig:
         self.token = settings.get("auth.bearer.token", "")
 
 
+class RedisConfig:
+    """Redis configuration."""
+    
+    url: str  # Redis connection URL
+    key_prefix: str  # Redis key prefix for tokens
+    
+    def __init__(self, settings: LazySettings):
+        self.url = settings.get(
+            "auth.oidc.token_store.redis.url", "redis://localhost:6379"
+        )
+        self.key_prefix = settings.get(
+            "auth.oidc.token_store.redis.key_prefix", "slack_token:"
+        )
+
+
 class TokenStoreConfig:
     """Token storage configuration."""
     
     backend: str  # Token storage backend (memory, redis)
-    redis_url: str  # Redis connection URL
-    key_prefix: str  # Redis key prefix for tokens
+    redis: RedisConfig  # Redis configuration
+    encryption_key: str  # Encryption key for token storage
     
     def __init__(self, settings: LazySettings):
         self.backend = settings.get("auth.oidc.token_store.backend", "memory")
-        self.redis_url = settings.get(
-            "auth.oidc.token_store.redis_url", "redis://localhost:6379"
-        )
-        self.key_prefix = settings.get(
-            "auth.oidc.token_store.key_prefix", "slack_token:"
-        )
+        self.redis = RedisConfig(settings)
+        self.encryption_key = settings.get("auth.oidc.token_store.encryption_key", "")
 
 
 class OIDCAuthConfig:
@@ -108,6 +119,10 @@ class BotConfig:
             if not self.auth.oidc.configuration_url or not self.auth.oidc.client_id:
                 raise ValueError(
                     "auth.mode=oidc requires auth.oidc.configuration_url and auth.oidc.client_id"
+                )
+            if self.auth.oidc.token_store.backend == "redis" and not self.auth.oidc.token_store.encryption_key:
+                raise ValueError(
+                    "auth.oidc.token_store.backend=redis requires auth.oidc.token_store.encryption_key"
                 )
         else:
             raise ValueError(

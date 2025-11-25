@@ -158,11 +158,19 @@ agents: {}
   #       path: "/mcp"  # Optional path to append to URL
   #       headers:
   #         Authorization: "Bearer token"
+  #       tools:
+  #         allowed: []  # List of allowed tool names
+  #         rejected: []  # List of rejected tool names
+  #         prefix: ""  # Prefix for tool names
   #     # Or use url for external MCP servers
   #     - name: "External MCP"
   #       url: "https://mcp-server.example.com"
   #       headers:
   #         Authorization: "Bearer token"
+  #       tools:
+  #         allowed: []
+  #         rejected: []
+  #         prefix: ""
   #   server:
   #     url: ""
   #   a2a:
@@ -245,5 +253,7 @@ slackBot:
     #   scope: "openid profile email"
     #   token_store:
     #     backend: memory  # or "redis"
-    #     redis_url: "redis://localhost:6379"
-    #     key_prefix: "slack_token:"
+    #     redis:
+    #       url: "redis://localhost:6379"
+    #       key_prefix: "slack_token:"
+    #     encryption_key: ""  # Required for redis backend

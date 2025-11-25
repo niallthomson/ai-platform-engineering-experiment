@@ -1,6 +1,7 @@
 # type: ignore
 
 from dynaconf import Dynaconf, LazySettings
+from dynaconf.vendor.box.box import Box
 from typing import List, Dict
 from dataclasses import dataclass
 
@@ -22,10 +23,10 @@ class ModelConfig:
     def __init__(self, settings: LazySettings):
         self.provider = settings.get("model.provider", "bedrock")
         self.model_id = settings.get(
-            "model.name", "us.anthropic.claude-sonnet-4-20250514-v1:0"
+            "model.model_id", "us.anthropic.claude-sonnet-4-20250514-v1:0"
         )
         self.temperature = float(settings.get("model.temperature", 0))
-        self.top_p = float(settings.get("model.name", 1.0))
+        self.top_p = float(settings.get("model.top_p", 1.0))
         self.bedrock = BedrockProviderConfig(settings)
         self.openai = OpenAIProviderConfig(settings)
 
@@ -121,6 +122,17 @@ class ServerConfig:
 
 
 @dataclass
+class MCPServerTools:
+    allowed: list[str]  # Allowed tool names
+    rejected: list[str]  # Rejected tool names
+    prefix: str = ""  # Tool name prefix
+
+    def __init__(self, settings: Box):
+        self.allowed = settings.get("allowed", [])
+        self.rejected = settings.get("rejected", [])
+        self.prefix = settings.get("prefix", None)
+
+
 class MCPServer:
     name: str  # MCP server name
     url: str  # MCP server URL
@@ -131,12 +143,17 @@ class MCPServer:
     authentication_header: str | None = (
         None  # Authentication header name (uses Authorization Bearer header if not specified)
     )
+    tools: MCPServerTools = None  # Tool filtering and prefixing
 
-    def __post_init__(self):
-        if self.headers is None:
-            self.headers = {}
-        if self.env is None:
-            self.env = {}
+    def __init__(self, settings: Box):
+        self.name = settings.get("name")
+        self.url = settings.get("url")
+        self.timeout = settings.get("timeout", 30)
+        self.env = settings.get("env", {})
+        self.headers = settings.get("headers", {})
+        self.authentication = settings.get("authentication", "none")
+        self.authentication_header = settings.get("authentication_header", None)
+        self.tools = MCPServerTools(settings.get("tools", Box()))
 
 
 @dataclass
@@ -171,7 +188,7 @@ class AgentConfig:
         self.system_prompt = settings.get("system_prompt", "")
         self.model = ModelConfig(settings)
         self.mcp_servers = [
-            MCPServer(**server) for server in settings.get("mcp_servers", [])
+            MCPServer(server) for server in settings.get("mcp_servers", [])
         ]
         self.mcp = MCPConfig(settings)
         self.server = ServerConfig(settings)

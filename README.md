@@ -7,6 +7,7 @@ Objectives:
 - Single flexible agent implementation that can be configured for different use-cases
 - MCP for tool access to common platform engineering systems
 - A2A for multi-agent architecture
+- Additional MCP endpoint for client integration
 - OIDC or shared key authentication with identity passed between agents
 - Simple Slack bot to interface with A2A agents, also supports OIDC via device auth flow
 - Runnable in Docker, Kubernetes or AWS Agentcore
@@ -16,6 +17,7 @@ Working on:
 
 - Running multiple replicas of all components
 - Token exchange to down-scope credentials passed between agents and to MCP servers
+- Dynamic prompt templates with Jinja (adapt to peer agents and MCP tools being available or not)
 
 NOTE: As a general rule the default configurations of components in this repository is for read-only operations. This is for safety purposes and if you want to take authorize more dangerous operations you will need to modify the appropriate configurations.
 

@@ -9,6 +9,34 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 
+class EncryptionProvider(ABC):
+    """Abstract encryption provider interface."""
+
+    @abstractmethod
+    def encrypt(self, data: str) -> str:
+        """Encrypt data."""
+        pass
+
+    @abstractmethod
+    def decrypt(self, data: str) -> str:
+        """Decrypt data."""
+        pass
+
+
+class FernetEncryptionProvider(EncryptionProvider):
+    """Fernet-based encryption provider."""
+
+    def __init__(self, key: bytes):
+        from cryptography.fernet import Fernet
+        self.fernet = Fernet(key)
+
+    def encrypt(self, data: str) -> str:
+        return self.fernet.encrypt(data.encode()).decode()
+
+    def decrypt(self, data: str) -> str:
+        return self.fernet.decrypt(data.encode()).decode()
+
+
 @dataclass
 class StoredToken:
     access_token: str
@@ -104,10 +132,18 @@ class InMemoryTokenStore(TokenStore):
 
 
 class RedisTokenStore(TokenStore):
-    """Redis-based token store."""
+    """Redis-based token store with required encryption."""
 
-    def __init__(self, redis_client, key_prefix: str = "slack_token:"):
+    def __init__(
+        self,
+        redis_client,
+        encryption_provider: EncryptionProvider,
+        key_prefix: str = "slack_token:",
+    ):
+        if not encryption_provider:
+            raise ValueError("RedisTokenStore requires an encryption_provider")
         self.redis = redis_client
+        self.encryption = encryption_provider
         self.key_prefix = key_prefix
 
     def _make_key(self, slack_user_id: str) -> str:
@@ -128,12 +164,9 @@ class RedisTokenStore(TokenStore):
         )
 
         key = self._make_key(slack_user_id)
-        await self.redis.setex(
-            key,
-            expires_in,
-            json.dumps(token.to_dict()),
-        )
-        logger.info("Stored token for user %s in Redis", slack_user_id)
+        data = self.encryption.encrypt(json.dumps(token.to_dict()))
+        await self.redis.setex(key, expires_in, data)
+        logger.info("Stored encrypted token for user %s in Redis", slack_user_id)
 
     async def get_token(self, slack_user_id: str) -> str | None:
         key = self._make_key(slack_user_id)
@@ -143,7 +176,8 @@ class RedisTokenStore(TokenStore):
             return None
 
         try:
-            token = StoredToken.from_dict(json.loads(data))
+            decrypted = self.encryption.decrypt(data)
+            token = StoredToken.from_dict(json.loads(decrypted))
             if datetime.now() >= token.expires_at:
                 await self.remove_token(slack_user_id)
                 return None

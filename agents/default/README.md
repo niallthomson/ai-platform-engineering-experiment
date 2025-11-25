@@ -49,6 +49,10 @@ mcp_servers:
       Authorization: Bearer dummytoken
     env:
       SOME_ENV_VAR: dummyvalue
+    tools:
+      allowed: []
+      rejected: []
+      prefix: ""
 
 server:
   host: 0.0.0.0
