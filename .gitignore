@@ -5,19 +5,24 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache
 
 # Virtual environments
 .venv
 
+# Ruff
 .ruff_cache
 
+# Helm charts
+helm/charts
+helm/Chart.lock
+values.yaml
+!helm/values.yaml
+
+# Misc
 .env
 
 .vscode
 
 NOTES.md
 
-helm/charts
-helm/Chart.lock
-values.yaml
-!helm/values.yaml

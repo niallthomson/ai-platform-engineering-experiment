@@ -10,27 +10,6 @@ from dataclasses import dataclass
 ## Also update Helm chart values and ConfigMaps it generates in 'helm/'
 
 
-class ModelConfig:
-    """Model configuration for LLM provider and parameters."""
-
-    provider: str  # LLM provider (bedrock, openai)
-    model_id: str  # Model identifier/name
-    temperature: float  # Sampling temperature (0-1)
-    top_p: float  # Nucleus sampling threshold (0-1)
-    bedrock: "BedrockProviderConfig"  # AWS Bedrock configuration
-    openai: "OpenAIProviderConfig"  # OpenAI configuration
-
-    def __init__(self, settings: LazySettings):
-        self.provider = settings.get("model.provider", "bedrock")
-        self.model_id = settings.get(
-            "model.model_id", "us.anthropic.claude-sonnet-4-20250514-v1:0"
-        )
-        self.temperature = float(settings.get("model.temperature", 0))
-        self.top_p = float(settings.get("model.top_p", 1.0))
-        self.bedrock = BedrockProviderConfig(settings)
-        self.openai = OpenAIProviderConfig(settings)
-
-
 class BedrockProviderConfig:
     """AWS Bedrock provider configuration."""
 
@@ -38,6 +17,15 @@ class BedrockProviderConfig:
 
     def __init__(self, settings: LazySettings):
         self.region = settings.get("model.bedrock.region", "us-west-2")
+        
+        
+class AnthropicProviderConfig:
+    """Anthropic provider configuration."""
+
+    api_key: str  # Anthropic API key
+
+    def __init__(self, settings: LazySettings):
+        self.api_key = settings.get("model.anthropic.api_key", "")
 
 
 class OpenAIProviderConfig:
@@ -49,6 +37,29 @@ class OpenAIProviderConfig:
     def __init__(self, settings: LazySettings):
         self.api_key = settings.get("model.openai.api_key", "")
         self.base_url = settings.get("model.openai.base_url", "")
+
+
+class ModelConfig:
+    """Model configuration for LLM provider and parameters."""
+
+    provider: str  # LLM provider (bedrock, anthropic, openai)
+    model_id: str  # Model identifier/name
+    temperature: float  # Sampling temperature (0-1)
+    top_p: float  # Nucleus sampling threshold (0-1)
+    bedrock: "BedrockProviderConfig"  # AWS Bedrock configuration
+    openai: "OpenAIProviderConfig"  # OpenAI configuration
+    anthropic: "AnthropicProviderConfig"  # Anthropic configuration
+
+    def __init__(self, settings: LazySettings):
+        self.provider = settings.get("model.provider", "bedrock")
+        self.model_id = settings.get(
+            "model.model_id", "us.anthropic.claude-sonnet-4-20250514-v1:0"
+        )
+        self.temperature = float(settings.get("model.temperature", 0))
+        self.top_p = float(settings.get("model.top_p", 1.0))
+        self.bedrock = BedrockProviderConfig(settings)
+        self.openai = OpenAIProviderConfig(settings)
+        self.anthropic = AnthropicProviderConfig(settings)
 
 
 class RedisTokenStoreConfig:

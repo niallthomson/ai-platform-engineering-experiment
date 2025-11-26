@@ -16,40 +16,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from .a2a.server import A2AServer
 from a2a.types import AgentSkill
 from .config import createConfig
-from .agent_registry import A2AAgentRegistry
-from .security_factory import configure_security
+from .strands.agent_registry import A2AAgentRegistry
+from .security_factory import OIDC_PUBLIC_PATHS, configure_security
 from default_agent.agent_factory import build_agent
 from .mcp_factory import create_mcp_server
 from .a2a.executor import StrandsAgentInstance
-from .resource_manager import ResourceManager
+from .utils.resource_manager import ResourceManager
+from .utils.health_check_filter import HealthCheckFilter
+from .utils.logging_setup import setup_logging
 from .strands.redis_session_repository import RedisSessionRepository
 import uvicorn
 import redis
 from redis.asyncio import client as redis_async
 import asyncio
 from a2a.server.agent_execution import RequestContext
-from uvicorn.config import LOGGING_CONFIG
 from strands.telemetry import StrandsTelemetry
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from .a2a.redis_task_store import RedisTaskStore
 
-if "OTEL_EXPORTER_OTLP_ENDPOINT" in os.environ:
-    strands_telemetry = StrandsTelemetry()
-    strands_telemetry.setup_otlp_exporter()  # Send traces to OTLP endpoint
-    # strands_telemetry.setup_console_exporter()  # Print traces to console
-    strands_telemetry.setup_meter(enable_otlp_exporter=True)
-
-format_prefix = "%(levelname)s | %(name)s |"
-format = "{} %(message)s".format(format_prefix)
-
-logging.basicConfig(format=format, level=logging.INFO)
-
-LOGGING_CONFIG["formatters"]["default"]["fmt"] = format
-LOGGING_CONFIG["formatters"]["access"]["fmt"] = (
-    '{} %(client_addr)s - "%(request_line)s" %(status_code)s'.format(format_prefix)
-)
+setup_logging()
 
 logger = logging.getLogger(__name__)
+
+if "OTEL_EXPORTER_OTLP_ENDPOINT" in os.environ:
+    logger.info("OTLP endpoint found, enabling OpenTelemetry")
+    strands_telemetry = StrandsTelemetry()
+    strands_telemetry.setup_otlp_exporter()
+    strands_telemetry.setup_meter(enable_otlp_exporter=True)
 
 
 async def run(loop):
@@ -180,6 +173,8 @@ async def run(loop):
 
     app.mount("/", fastapi_app)
 
+    logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
+
     uvicorn_config = uvicorn.Config(
         app,
         loop=loop,
@@ -188,10 +183,14 @@ async def run(loop):
         ws="websockets-sansio",
         timeout_graceful_shutdown=120,
     )
+    
+    # The URLs we want to exclude from tracing matches the security exclusion list
+    # .... for now?
+    excluded_urls = ",".join(OIDC_PUBLIC_PATHS)
 
     FastAPIInstrumentor.instrument_app(
         app,
-        excluded_urls="/health,.well-known/*,/mcp*,/register,/authorize,/consent,/consent/submit,/auth/callback,/token",
+        excluded_urls=excluded_urls,
         exclude_spans=["receive", "send"],
     )
 

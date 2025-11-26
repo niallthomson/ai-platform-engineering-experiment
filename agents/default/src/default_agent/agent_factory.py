@@ -1,6 +1,6 @@
 import logging
-from typing import List, Sequence, Optional
-from default_agent.agent_registry import A2AAgentRegistry
+from typing import List, Any
+from default_agent.strands.agent_registry import A2AAgentRegistry
 from default_agent.model_factory import create_model
 from mcp.client.streamable_http import streamablehttp_client
 from strands import Agent, ToolContext, tool
@@ -11,7 +11,7 @@ from strands.session import SessionManager, RepositorySessionManager, SessionRep
 from strands.session.file_session_manager import FileSessionManager
 from .config import AgentConfig
 from .a2a.executor import StrandsAgentInstance
-from typing import Any
+from .strands.forgiving_tool_provider import ForgivingToolProvider
 
 logger = logging.getLogger(__name__)
 
@@ -126,20 +126,4 @@ def build_agent(
     )
 
 
-class ForgivingToolProvider(ToolProvider):
-    def __init__(self, inner: ToolProvider) -> None:
-        super().__init__()
-        self.inner = inner
 
-    async def load_tools(self, **kwargs: Any) -> Sequence["AgentTool"]:
-        try:
-            return await self.inner.load_tools(**kwargs)
-        except Exception as e:
-            logger.error(f"Failed to load tools: {e}")
-            return []
-
-    def add_consumer(self, consumer_id: Any, **kwargs: Any) -> None:
-        self.inner.add_consumer(consumer_id, **kwargs)
-
-    def remove_consumer(self, consumer_id: Any, **kwargs: Any) -> None:
-        self.inner.remove_consumer(consumer_id, **kwargs)

@@ -1,6 +1,8 @@
 # AI Platform Engineering Experiment
 
-This repository is code for experiments around applying Generative AI to Platform Engineering use-cases. Everything included in this repository is considered prototypes and experiments.
+This repository is code for experiments around applying Generative AI to Platform Engineering use-cases. 
+
+Everything included in this repository is considered prototypes and experiments and is not designed for production. Use at your own risk.
 
 Objectives:
 
@@ -24,10 +26,10 @@ NOTE: As a general rule the default configurations of components in this reposit
 
 The quick start examples include three agents and one MCP server:
 
-- Platform agent: Supervisor agent which can dispatch requests to the other agents
-- AWS agent: Answers questions related to AWS and can connect to the AWS Knowledge MCP server
-- Terraform agent: Answers questions related to Terraform and can connect to the Terraform MCP server
-- Terraform MCP server: Runs the official [Terraform MCP server](https://github.com/hashicorp/terraform-mcp-server)
+- **Platform agent:** Supervisor agent which can dispatch requests to the other agents
+- **AWS agent:** Answers questions related to AWS and can connect to the AWS Knowledge MCP server
+- **Terraform agent:** Answers questions related to Terraform and can connect to the Terraform MCP server
+- **Terraform MCP server:** Runs the official [Terraform MCP server](https://github.com/hashicorp/terraform-mcp-server)
 
 For more information on configuring individual agents see the default agent [README](./agents/default/README.md).
 

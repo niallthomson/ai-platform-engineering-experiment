@@ -1,5 +1,5 @@
 import logging
-from .resource_manager import ResourceManager
+from .utils.resource_manager import ResourceManager
 from fastmcp import FastMCP, Context
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 from .config import AgentConfig

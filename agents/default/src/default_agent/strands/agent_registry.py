@@ -39,6 +39,15 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRegistryEntry:
+    """Registry entry tracking an A2A agent's availability and metadata.
+    
+    Attributes:
+        url: Agent endpoint URL.
+        card: Agent card with capabilities and metadata.
+        resolved: Whether the agent card was successfully fetched.
+        last_attempt: Timestamp of last fetch attempt.
+        error: Error message from last failed fetch attempt.
+    """
     url: str
     card: AgentCard
     resolved: bool
@@ -63,6 +72,16 @@ class AgentRegistryEntry:
 
 
 class A2AAgentRegistry:
+    """Registry managing A2A agent discovery and availability.
+    
+    Periodically fetches agent cards from configured URLs and provides tools
+    for interacting with available agents.
+    
+    Attributes:
+        entries: Map of agent URLs to registry entries.
+        httpx_client: HTTP client for agent communication.
+        refresh_interval: Seconds between agent card refresh attempts.
+    """
     entries: dict[str, AgentRegistryEntry]
     httpx_client: httpx.AsyncClient
     refresh_interval: int
@@ -79,6 +98,7 @@ class A2AAgentRegistry:
         self._running = False
 
     async def _fetch_agent_card(self, entry: AgentRegistryEntry) -> None:
+        """Fetch and update agent card for a registry entry."""
         try:
             resolver = A2ACardResolver(
                 httpx_client=self.httpx_client, base_url=entry.url
@@ -98,20 +118,24 @@ class A2AAgentRegistry:
             entry.last_attempt = datetime.now()
 
     async def _refresh_loop(self) -> None:
+        """Background task that periodically refreshes all agent cards."""
         while self._running:
             await self.refresh_all()
             await asyncio.sleep(self.refresh_interval)
 
     async def refresh_all(self) -> None:
+        """Refresh agent cards for all registered agents concurrently."""
         tasks = [self._fetch_agent_card(entry) for entry in self.entries.values()]
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def start(self) -> None:
+        """Start the registry and begin periodic agent card refresh."""
         self._running = True
         await self.refresh_all()
         self._refresh_task = asyncio.create_task(self._refresh_loop())
 
     async def stop(self) -> None:
+        """Stop the registry and cleanup resources."""
         logger.info("Stopping agent registry")
         self._running = False
         if self._refresh_task:
@@ -123,6 +147,7 @@ class A2AAgentRegistry:
         await self.httpx_client.aclose()
 
     def get_tools(self) -> list["RegistryAgentTool"]:
+        """Get tools for all successfully resolved agents."""
         return [
             RegistryAgentTool(entry.card)
             for entry in self.entries.values()
@@ -130,6 +155,7 @@ class A2AAgentRegistry:
         ]
 
     def get_status(self) -> dict[str, dict]:
+        """Get availability status for all registered agents."""
         return {
             url: {
                 "available": entry.resolved,
@@ -144,6 +170,15 @@ class A2AAgentRegistry:
 
 
 class RegistryAgentTool(AgentTool):
+    """Tool for delegating tasks to an A2A agent.
+    
+    Wraps an agent card as a Strands tool, enabling LLM-driven delegation
+    to peer agents with conversation context tracking.
+    
+    Attributes:
+        card: Agent card describing capabilities.
+        tool_id: Unique identifier for this tool instance.
+    """
     card: AgentCard
     tool_id: str
 
@@ -261,6 +296,7 @@ class RegistryAgentTool(AgentTool):
             await httpx_client.aclose()
 
     def _extract_text(self, obj: Task | Message | None) -> str:
+        """Extract text content from Task or Message response."""
         if not obj:
             return ""
         if isinstance(obj, Message):

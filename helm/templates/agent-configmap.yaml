@@ -52,15 +52,9 @@ data:
   AGENT_MODEL__PROVIDER: {{ $config.model.provider | quote }}
   AGENT_MODEL__MODEL_ID: {{ $config.model.model_id | quote }}
   {{- if eq $config.model.provider "bedrock" }}
-  {{- if $config.model.bedrock }}
   AGENT_MODEL__BEDROCK__REGION: {{ $config.model.bedrock.region | quote }}
-  {{- end }}
   {{- else if eq $config.model.provider "openai" }}
-  {{- if $config.model.openai }}
-  {{- if $config.model.openai.base_url }}
   AGENT_MODEL__OPENAI__BASE_URL: {{ $config.model.openai.base_url | quote }}
-  {{- end }}
-  {{- end }}
   {{- end }}
   {{- end }}
   {{- if $config.auth }}

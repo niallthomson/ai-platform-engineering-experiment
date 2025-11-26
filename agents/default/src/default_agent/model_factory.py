@@ -1,5 +1,6 @@
 import logging
 from strands.models import Model, BedrockModel
+from strands.models.anthropic import AnthropicModel
 from strands.models.openai import OpenAIModel
 from .config import ModelConfig
 from botocore.config import Config as BotocoreConfig
@@ -24,6 +25,16 @@ def create_model(config: ModelConfig) -> Model:
                 temperature=config.temperature,
                 region_name=config.bedrock.region,
                 boto_client_config=boto_config,
+            )
+            
+        case "anthropic":
+            return AnthropicModel(
+                model_id=config.model_id,
+                max_tokens=4096,
+                client_args={
+                    "api_key": config.anthropic.api_key,
+                },
+                params={"temperature": config.temperature},
             )
 
         case "openai":
