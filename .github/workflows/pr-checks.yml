@@ -56,4 +56,4 @@ jobs:
       
       - name: Test Helm chart
         working-directory: helm
-        run: helm upgrade --install platform-ai . -f values.example.yaml --set agentDefaults.auth.bearer.token=dummy --dry-run
+        run: helm template . -f values.example.yaml --set agentDefaults.auth.bearer.token=dummy
