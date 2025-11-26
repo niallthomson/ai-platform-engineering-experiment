@@ -1,4 +1,4 @@
-from .disable_a2a_tracing import disable_a2a_tracing
+from .a2a.disable_a2a_tracing import disable_a2a_tracing
 
 disable_a2a_tracing()
 
@@ -10,21 +10,28 @@ mcp_instrumentation()
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .server import A2AServer
+from .a2a.server import A2AServer
 from a2a.types import AgentSkill
 from .config import createConfig
 from .agent_registry import A2AAgentRegistry
 from .security_factory import configure_security
 from default_agent.agent_factory import build_agent
 from .mcp_factory import create_mcp_server
-from .executor import StrandsAgentInstance
+from .a2a.executor import StrandsAgentInstance
+from .resource_manager import ResourceManager
+from .strands.redis_session_repository import RedisSessionRepository
 import uvicorn
+import redis
+from redis.asyncio import client as redis_async
+import asyncio
 from a2a.server.agent_execution import RequestContext
 from uvicorn.config import LOGGING_CONFIG
 from strands.telemetry import StrandsTelemetry
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from .a2a.redis_task_store import RedisTaskStore
 
 if "OTEL_EXPORTER_OTLP_ENDPOINT" in os.environ:
     strands_telemetry = StrandsTelemetry()
@@ -50,8 +57,39 @@ async def run(loop):
 
     logger.info(f"Starting agent: {config.name}")
 
+    resource_manager = ResourceManager()
+    
+    session_repository = None
+    if config.sessions.mode == "redis":
+        logger.info(f"Using Redis for session storage ({config.sessions.redis.url})")
+        redis_client = redis.from_url(config.sessions.redis.url)
+        resource_manager.register(
+            "redis_session_client",
+            lambda: asyncio.to_thread(redis_client.close)
+        )
+        session_repository = RedisSessionRepository(
+            redis_client=redis_client,
+            prefix=config.sessions.redis.key_prefix
+        )
+        
+    task_store = None
+    
+    if config.a2a.task_store.mode == "redis":
+        logger.info(f"Using Redis for task store ({config.a2a.task_store.redis.url})")
+        async_redis_client = redis_async.Redis.from_url(config.a2a.task_store.redis.url)
+        resource_manager.register(
+            "redis_task_store_client",
+            async_redis_client.aclose
+        )
+
+        task_store = RedisTaskStore(
+            redis_client=async_redis_client,
+            prefix=config.a2a.task_store.redis.key_prefix
+        )
+    
     registry = A2AAgentRegistry(agent_urls=config.a2a.peer_agents, refresh_interval=60)
     await registry.start()
+    resource_manager.register("agent_registry", registry.stop)
 
     def agent_generator(context: RequestContext | None) -> StrandsAgentInstance:
         authorization_header: str | None = None
@@ -70,17 +108,30 @@ async def run(loop):
 
                 authorization_header = call_headers.get("authorization", None)
 
-        return build_agent(config, registry, context_id, authorization_header, username)
+        return build_agent(config, registry, session_repository, context_id, authorization_header, username)
 
-    lifespan = None
+    @asynccontextmanager
+    async def resource_manager_lifespan(app: FastAPI):
+        yield
+        await resource_manager.cleanup_all()
+        
+    @asynccontextmanager
+    async def dummy_lifespan(app: FastAPI):
+        yield
+        
+    @asynccontextmanager
+    async def combined_lifespan(app: FastAPI):
+        async with resource_manager_lifespan(app):
+            async with mcp_app.lifespan(app) if mcp_app is not None else dummy_lifespan(app):
+                yield
+
     mcp_app = None
 
     if config.mcp.enabled:
         logger.info("MCP enabled")
-        mcp_app = create_mcp_server(config, registry)
-        lifespan = mcp_app.lifespan
+        mcp_app = create_mcp_server(config, resource_manager)
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=combined_lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -110,6 +161,7 @@ async def run(loop):
         skills=skills,
         agent_generator=agent_generator,
         security_schemes=security_schemes,
+        task_store=task_store,
     )
 
     fastapi_app = a2a_server.to_fastapi_app()
@@ -134,6 +186,7 @@ async def run(loop):
         host=config.server.host,
         port=config.server.port,
         ws="websockets-sansio",
+        timeout_graceful_shutdown=120,
     )
 
     FastAPIInstrumentor.instrument_app(

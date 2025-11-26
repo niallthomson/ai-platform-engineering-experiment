@@ -17,5 +17,7 @@ wheels/
 
 NOTES.md
 
+helm/charts
+helm/Chart.lock
 values.yaml
 !helm/values.yaml

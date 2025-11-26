@@ -177,3 +177,21 @@ app.kubernetes.io/name: {{ include "platform-ai.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/type: slack-bot
 {{- end }}
+
+{{- define "getOrGeneratePass" }}
+{{- $len := (default 32 .Length) | int -}}
+{{- $obj := (lookup "v1" "Secret" .Namespace .Name).data -}}
+{{- if $obj }}
+{{- index $obj .Key -}}
+{{- else -}}
+{{- randAlphaNum $len | b64enc -}}
+{{- end -}}
+{{- end }}
+
+{{- define "platform-ai.slackBotEncryptionKey" -}}
+{{- if not (empty (dig "slackBot" "auth" "oidc" "token_store" "encryption_key" "" .Values.AsMap)) -}}
+    {{- .Values.slackBot.auth.oidc.token_store.encryption_key | b64enc -}}
+{{- else -}}
+    {{- include "getOrGeneratePass" (dict "Namespace" .Release.Namespace "Name" (.Values.slackBot.secret.name | default (include "platform-ai.slackBotFullname" .)) "Key" "SLACKBOT_AUTH__OIDC__TOKEN_STORE__ENCRYPTION_KEY") -}}
+{{- end -}}
+{{- end -}}

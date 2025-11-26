@@ -23,28 +23,17 @@ data:
   {{- if .Values.slackBot.auth }}
   SLACKBOT_AUTH__MODE: {{ .Values.slackBot.auth.mode | default "bearer" | quote }}
   {{- if eq .Values.slackBot.auth.mode "oidc" }}
-  {{- if .Values.slackBot.auth.oidc }}
-  {{- if .Values.slackBot.auth.oidc.configuration_url }}
   SLACKBOT_AUTH__OIDC__CONFIGURATION_URL: {{ .Values.slackBot.auth.oidc.configuration_url | quote }}
-  {{- end }}
-  {{- if .Values.slackBot.auth.oidc.client_id }}
   SLACKBOT_AUTH__OIDC__CLIENT_ID: {{ .Values.slackBot.auth.oidc.client_id | quote }}
-  {{- end }}
-  {{- if .Values.slackBot.auth.oidc.scope }}
   SLACKBOT_AUTH__OIDC__SCOPE: {{ .Values.slackBot.auth.oidc.scope | quote }}
-  {{- end }}
-  {{- if .Values.slackBot.auth.oidc.token_store }}
-  {{- if .Values.slackBot.auth.oidc.token_store.backend }}
+  {{- if .Values.redis.deploy}}
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE__BACKEND: redis
+  SLACKBOT_AUTH__OIDC__TOKEN_STORE__REDIS__URL: {{ printf "redis://%s-redis-haproxy.%s.svc.cluster.local" (include "platform-ai.name" .) $.Release.Namespace | quote }}
+  {{- else if (dig "slackBot" "auth" "oidc" "token_store" "backend" false .Values.AsMap) }}
   SLACKBOT_AUTH__OIDC__TOKEN_STORE__BACKEND: {{ .Values.slackBot.auth.oidc.token_store.backend | quote }}
-  {{- end }}
-  {{- if .Values.slackBot.auth.oidc.token_store.redis }}
   {{- if .Values.slackBot.auth.oidc.token_store.redis.url }}
   SLACKBOT_AUTH__OIDC__TOKEN_STORE__REDIS__URL: {{ .Values.slackBot.auth.oidc.token_store.redis.url | quote }}
-  {{- end }}
-  {{- if .Values.slackBot.auth.oidc.token_store.redis.key_prefix }}
   SLACKBOT_AUTH__OIDC__TOKEN_STORE__REDIS__KEY_PREFIX: {{ .Values.slackBot.auth.oidc.token_store.redis.key_prefix | quote }}
-  {{- end }}
-  {{- end }}
   {{- end }}
   {{- end }}
   {{- end }}

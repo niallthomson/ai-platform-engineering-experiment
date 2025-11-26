@@ -62,6 +62,16 @@ server:
 a2a:
   peer_agents:
     - https://someagent
+  task_store:
+    mode: memory  # or "redis" (default: "memory")
+    # redis:
+    #   url: redis://localhost:6379
+    #   key_prefix: "a2a"  # default: "a2a"
+  queue_manager:
+    mode: none  # or "redis" (default: "none")
+    # redis:
+    #   url: redis://localhost:6379
+    #   key_prefix: "a2a"  # default: "a2a"
 
 auth:
   mode: bearer # or "oidc" or "none"
@@ -70,6 +80,13 @@ auth:
   # oidc:
   #   configuration_url: "https://auth.example.com/realms/platform/.well-known/openid-configuration"
   #   audience: "someaudience"
+
+sessions:
+  storage:
+    mode: file  # or "redis" (default: "file")
+    # redis:
+    #   url: redis://localhost:6379
+    #   key_prefix: "agent"  # default: "agent"
 ```
 
 ## Authentication Modes
@@ -117,6 +134,15 @@ export AGENT_NAME="Overridden name"
 export AGENT_MODEL__BEDROCK__REGION="us-west-2"
 export AGENT_SERVER__PORT="9000"
 export AGENT_A2A__PEER_AGENTS='["http://someagent"]'
+export AGENT_A2A__TASK_STORE__MODE="redis"
+export AGENT_A2A__TASK_STORE__REDIS__URL="redis://localhost:6379"
+export AGENT_A2A__TASK_STORE__REDIS__KEY_PREFIX="a2a"
+export AGENT_A2A__QUEUE_MANAGER__MODE="redis"
+export AGENT_A2A__QUEUE_MANAGER__REDIS__URL="redis://localhost:6379"
+export AGENT_A2A__QUEUE_MANAGER__REDIS__KEY_PREFIX="a2a"
 export AGENT_AUTH__MODE="oidc"
 export AGENT_AUTH__OIDC__CONFIGURATION_URL="https://auth.example.com/.well-known/openid-configuration"
+export AGENT_SESSIONS__STORAGE__MODE="redis"
+export AGENT_SESSIONS__STORAGE__REDIS__URL="redis://localhost:6379"
+export AGENT_SESSIONS__STORAGE__REDIS__KEY_PREFIX="agent1"
 ```

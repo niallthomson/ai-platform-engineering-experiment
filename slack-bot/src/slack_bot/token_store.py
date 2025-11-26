@@ -138,7 +138,7 @@ class RedisTokenStore(TokenStore):
         self,
         redis_client,
         encryption_provider: EncryptionProvider,
-        key_prefix: str = "slack_token:",
+        key_prefix: str = "",
     ):
         if not encryption_provider:
             raise ValueError("RedisTokenStore requires an encryption_provider")
@@ -147,7 +147,7 @@ class RedisTokenStore(TokenStore):
         self.key_prefix = key_prefix
 
     def _make_key(self, slack_user_id: str) -> str:
-        return f"{self.key_prefix}{slack_user_id}"
+        return f"{self.key_prefix}slack:token:{slack_user_id}"
 
     async def store_token(
         self,

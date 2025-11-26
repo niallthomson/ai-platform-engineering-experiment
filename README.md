@@ -12,11 +12,10 @@ Objectives:
 - Simple Slack bot to interface with A2A agents, also supports OIDC via device auth flow
 - Runnable in Docker, Kubernetes or AWS Agentcore
 - Emits OpenTelemetry traces
+- Capable of running distributed, with multiple replicas of agents
 
 Working on:
 
-- Running multiple replicas of all components
-- Token exchange to down-scope credentials passed between agents and to MCP servers
 - Dynamic prompt templates with Jinja (adapt to peer agents and MCP tools being available or not)
 
 NOTE: As a general rule the default configurations of components in this repository is for read-only operations. This is for safety purposes and if you want to take authorize more dangerous operations you will need to modify the appropriate configurations.

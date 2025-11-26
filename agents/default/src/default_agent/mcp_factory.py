@@ -1,5 +1,5 @@
 import logging
-from default_agent.agent_registry import A2AAgentRegistry
+from .resource_manager import ResourceManager
 from fastmcp import FastMCP, Context
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 from .config import AgentConfig
@@ -11,6 +11,11 @@ from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.types import Message, Part, Role, TextPart, Task, AgentCard
 from fastmcp.server.dependencies import get_access_token
 from opentelemetry.propagate import inject
+from key_value.aio.stores.redis import RedisStore
+from key_value.aio.wrappers.encryption import FernetEncryptionWrapper
+from cryptography.fernet import Fernet
+import redis as redis
+
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -43,7 +48,7 @@ class AgentCardResolver:
             await httpx_client.aclose()
 
 
-def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
+def create_mcp_server(config: AgentConfig, resource_manager: ResourceManager):
     """Create and configure MCP server with authentication."""
 
     mcp_auth = None
@@ -59,6 +64,18 @@ def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
             raise ValueError("OIDC client_id is required when auth mode is 'oidc'")
         if not config.auth.oidc.client_secret:
             raise ValueError("OIDC client_secret is required when auth mode is 'oidc'")
+        
+        client_storage = None
+        
+        if config.mcp.token_store.mode == "redis":
+            logger.info(f"Using Redis token store for MCP auth ({config.mcp.token_store.redis.url})")
+            store = RedisStore(url=config.mcp.token_store.redis.url, default_collection="mcp:token")
+            client_storage=FernetEncryptionWrapper(
+                key_value=store,
+                fernet=Fernet(config.mcp.token_store.encryption_key)
+            )
+            
+            resource_manager.register("mcp_token", store.close)
 
         mcp_auth = OIDCProxy(
             config_url=config.auth.oidc.configuration_url,
@@ -67,6 +84,7 @@ def create_mcp_server(config: AgentConfig, registry: A2AAgentRegistry):
             base_url=base_url,
             algorithm="RS256",
             required_scopes=["openid", "profile"],
+            client_storage=client_storage
         )
 
     resolver = AgentCardResolver(config, base_url)

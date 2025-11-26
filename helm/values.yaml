@@ -85,9 +85,6 @@ agentDefaults:
   auth:
     mode: bearer
 
-  mcp:
-    enabled: false
-
   model:
     provider: bedrock
     model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
@@ -99,6 +96,30 @@ agentDefaults:
   opentelemetry:
     endpoint: ""
     token: ""
+
+  sessions:
+    storage:
+      mode: file  # or "redis" (default: "file")
+      # redis:
+      #   url: "redis://localhost:6379"
+      #   key_prefix: "agent"  # default: "agent"
+
+  a2a:
+    task_store:
+      mode: memory  # or "redis" (default: "memory")
+      # redis:
+      #   url: "redis://localhost:6379"
+      #   key_prefix: "a2a"  # default: "a2a"
+    queue_manager:
+      mode: none  # or "redis" (default: "none")
+      # redis:
+      #   url: "redis://localhost:6379"
+      #   key_prefix: "a2a"  # default: "a2a"
+
+  mcp:
+    enabled: false
+    token_store:
+      mode: memory
 
 
 # MCP Servers
@@ -190,6 +211,14 @@ agents: {}
   #         client_secret: ""
   #         audiences: 
   #           - "audience"
+  #   mcp:
+  #     enabled: false
+  #     token_store:
+  #       backend: memory  # or "redis"
+  #       redis:
+  #         url: "redis://localhost:6379"
+  #         key_prefix: ""
+  #       encryption_key: ""  # Required for redis backend
 
 # Slack Bot
 slackBot:
@@ -255,5 +284,10 @@ slackBot:
     #     backend: memory  # or "redis"
     #     redis:
     #       url: "redis://localhost:6379"
-    #       key_prefix: "slack_token:"
+    #       key_prefix: ""
     #     encryption_key: ""  # Required for redis backend
+
+redis:
+  deploy: true
+  haproxy:
+    enabled: true

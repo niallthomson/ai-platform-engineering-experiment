@@ -39,7 +39,7 @@ class RedisConfig:
             "auth.oidc.token_store.redis.url", "redis://localhost:6379"
         )
         self.key_prefix = settings.get(
-            "auth.oidc.token_store.redis.key_prefix", "slack_token:"
+            "auth.oidc.token_store.redis.key_prefix", ""
         )
 
 

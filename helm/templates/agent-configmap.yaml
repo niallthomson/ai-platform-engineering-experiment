@@ -40,6 +40,13 @@ data:
   {{- $config := mustMergeOverwrite (deepCopy $.Values.agentDefaults) (omit $agent "name" "description" "system_prompt" "mcpServers" "a2a") }}
   {{- if $config.mcp.enabled }}
   AGENT_MCP__ENABLED: "true"
+  {{- if $ctx.root.Values.redis.deploy }}
+  AGENT_MCP__TOKEN_STORE__REDIS__URL: {{ printf "redis://%s-redis-haproxy.%s.svc.cluster.local" (include "platform-ai.name" $ctx.root) $.Release.Namespace | quote }}
+  AGENT_MCP__TOKEN_STORE__REDIS__KEY_PREFIX: {{ $ctx.agent.id | quote }}
+  {{- else if eq $config.mcp.token_store.mode "redis" }}
+  AGENT_MCP__TOKEN_STORE__REDIS__URL: {{ $config.mcp.token_store.redis.url | quote }}
+  AGENT_MCP__TOKEN_STORE__REDIS__KEY_PREFIX: {{ $config.mcp.token_store.redis.key_prefix | quote }}
+  {{- end }}
   {{- end }}
   {{- if $config.model }}
   AGENT_MODEL__PROVIDER: {{ $config.model.provider | quote }}
@@ -62,6 +69,30 @@ data:
   AGENT_AUTH__OIDC__CONFIGURATION_URL: {{ $config.auth.oidc.configuration_url | quote }}
   AGENT_AUTH__OIDC__AUDIENCES: {{ toJson $config.auth.oidc.audiences | quote }}
   AGENT_AUTH__OIDC__CLIENT_ID: {{ $config.auth.oidc.client_id | quote }}
+  {{- end }}
+  {{- end }}
+  {{- if $ctx.root.Values.redis.deploy }}
+  AGENT_SESSIONS__STORAGE__MODE: redis
+  AGENT_SESSIONS__STORAGE__REDIS__URL: {{ printf "redis://%s-redis-haproxy.%s.svc.cluster.local" (include "platform-ai.name" $ctx.root) $.Release.Namespace | quote }}
+  AGENT_SESSIONS__STORAGE__REDIS__KEY_PREFIX: {{ $ctx.agent.id | quote }}
+  AGENT_A2A__TASK_STORE__MODE: redis
+  AGENT_A2A__TASK_STORE__REDIS__URL: {{ printf "redis://%s-redis-haproxy.%s.svc.cluster.local" (include "platform-ai.name" $ctx.root) $.Release.Namespace | quote }}
+  AGENT_A2A__TASK_STORE__REDIS__KEY_PREFIX: {{ $ctx.agent.id | quote }}
+  {{- else }}
+  AGENT_SESSIONS__STORAGE__MODE: {{ $config.sessions.storage.mode | quote }}
+  {{- if eq $config.sessions.storage.mode "redis" }}
+  AGENT_SESSIONS__STORAGE__REDIS__URL: {{ $config.sessions.storage.redis.url | quote }}
+  AGENT_SESSIONS__STORAGE__REDIS__KEY_PREFIX: {{ $config.sessions.storage.redis.key_prefix | quote }}
+  {{- end }}
+  AGENT_A2A__TASK_STORE__MODE: {{ $config.a2a.task_store.mode | quote }}
+  {{- if eq $config.a2a.task_store.mode "redis" }}
+  AGENT_A2A__TASK_STORE__REDIS__URL: {{ $config.a2a.task_store.redis.url | quote }}
+  AGENT_A2A__TASK_STORE__REDIS__KEY_PREFIX: {{ $config.a2a.task_store.redis.key_prefix | quote }}
+  {{- end }}
+  AGENT_A2A__QUEUE_MANAGER__MODE: {{ $config.a2a.queue_manager.mode | quote }}
+  {{- if eq $config.a2a.queue_manager.mode "redis" }}
+  AGENT_A2A__QUEUE_MANAGER__REDIS__URL: {{ $config.a2a.queue_manager.redis.url | quote }}
+  AGENT_A2A__QUEUE_MANAGER__REDIS__KEY_PREFIX: {{ $config.a2a.queue_manager.redis.key_prefix | quote }}
   {{- end }}
   {{- end }}
   {{- if ne $.Values.agentDefaults.opentelemetry.endpoint "" }}

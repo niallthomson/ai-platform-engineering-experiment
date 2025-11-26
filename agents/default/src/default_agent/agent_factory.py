@@ -1,5 +1,5 @@
 import logging
-from typing import List, Sequence
+from typing import List, Sequence, Optional
 from default_agent.agent_registry import A2AAgentRegistry
 from default_agent.model_factory import create_model
 from mcp.client.streamable_http import streamablehttp_client
@@ -7,10 +7,10 @@ from strands import Agent, ToolContext, tool
 from strands.tools.mcp import MCPClient
 from strands.types.tools import AgentTool
 from strands.experimental.tools import ToolProvider
-from strands.session import SessionManager
+from strands.session import SessionManager, RepositorySessionManager, SessionRepository
 from strands.session.file_session_manager import FileSessionManager
 from .config import AgentConfig
-from .executor import StrandsAgentInstance
+from .a2a.executor import StrandsAgentInstance
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ def get_user_name(tool_context: ToolContext) -> str:
 def build_agent(
     config: AgentConfig,
     registry: A2AAgentRegistry,
+    session_repository: SessionRepository | None,
     context_id: str | None,
     authorization_header: str | None,
     username: str | None,
@@ -38,7 +39,13 @@ def build_agent(
     trace_attributes = {}
 
     if context_id is not None:
-        session_manager = FileSessionManager(session_id=context_id)
+        if session_repository:
+            session_manager = RepositorySessionManager(
+                session_id=context_id,
+                session_repository=session_repository
+            )
+        else:
+            session_manager = FileSessionManager(session_id=context_id)
 
     if username:
         trace_attributes["user.id"] = username

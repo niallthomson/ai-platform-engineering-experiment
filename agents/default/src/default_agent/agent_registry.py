@@ -112,6 +112,7 @@ class A2AAgentRegistry:
         self._refresh_task = asyncio.create_task(self._refresh_loop())
 
     async def stop(self) -> None:
+        logger.info("Stopping agent registry")
         self._running = False
         if self._refresh_task:
             self._refresh_task.cancel()

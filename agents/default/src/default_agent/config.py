@@ -51,13 +51,87 @@ class OpenAIProviderConfig:
         self.base_url = settings.get("model.openai.base_url", "")
 
 
+class RedisTokenStoreConfig:
+    """Redis configuration."""
+    
+    url: str  # Redis connection URL
+    key_prefix: str  # Redis key prefix for tokens
+    
+    def __init__(self, settings: LazySettings):
+        self.url = settings.get(
+            "mcp.token_store.redis.url", "redis://localhost:6379"
+        )
+        self.key_prefix = settings.get(
+            "mcp.token_store.redis.key_prefix", ""
+        )
+
+
+class TokenStoreConfig:
+    """Token storage configuration."""
+    
+    mode: str  # Token storage mode (memory, redis)
+    redis: RedisTokenStoreConfig  # Redis configuration
+    encryption_key: str  # Encryption key for token storage
+    
+    def __init__(self, settings: LazySettings):
+        self.mode = settings.get("mcp.token_store.mode", "memory")
+        self.redis = RedisTokenStoreConfig(settings)
+        self.encryption_key = settings.get("mcp.token_store.encryption_key", "")
+
+
 class MCPConfig:
     """Model Context Protocol configuration."""
 
     enabled: bool  # Enable MCP server endpoint
+    token_store: TokenStoreConfig  # Token storage configuration
 
     def __init__(self, settings: LazySettings):
         self.enabled = settings.get("mcp.enabled", False)
+        self.token_store = TokenStoreConfig(settings)
+        
+
+class A2ATaskStoreRedisConfig:
+    """Redis configuration for A2A task store."""
+
+    url: str  # Redis connection URL
+    key_prefix: str  # Key prefix for Redis keys
+
+    def __init__(self, settings: LazySettings):
+        self.url = settings.get("a2a.task_store.redis.url", "redis://localhost:6379")
+        self.key_prefix = settings.get("a2a.task_store.redis.key_prefix", "")
+
+
+class A2ATaskStoreConfig:
+    """A2A task store configuration."""
+
+    mode: str  # Storage mode (memory, redis)
+    redis: A2ATaskStoreRedisConfig  # Redis configuration
+
+    def __init__(self, settings: LazySettings):
+        self.mode = settings.get("a2a.task_store.mode", "memory")
+        self.redis = A2ATaskStoreRedisConfig(settings)
+        
+        
+class A2AQueueManagerRedisConfig:
+    """Redis configuration for A2A queue manager."""
+
+    url: str  # Redis connection URL
+    key_prefix: str  # Key prefix for Redis keys
+
+    def __init__(self, settings: LazySettings):
+        self.url = settings.get("a2a.queue_manager.redis.url", "redis://localhost:6379")
+        self.key_prefix = settings.get("a2a.queue_manager.redis.key_prefix", "")
+
+
+class A2AQueueManagerConfig:
+    """A2A queue manager configuration."""
+
+    mode: str  # Queue mode (none, redis)
+    redis: A2AQueueManagerRedisConfig  # Redis configuration
+
+    def __init__(self, settings: LazySettings):
+        self.mode = settings.get("a2a.queue_manager.mode", "none")
+        self.redis = A2AQueueManagerRedisConfig(settings)
 
 
 class A2AConfig:
@@ -65,10 +139,14 @@ class A2AConfig:
 
     skills: List["AgentSkill"]  # Agent-to-Agent skills
     peer_agents: List[str]  # List of peer agent endpoint URLs
+    task_store: A2ATaskStoreConfig  # Task store configuration
+    queue_manager: A2AQueueManagerConfig  # Queue manager configuration
 
     def __init__(self, settings: LazySettings):
         self.skills = [AgentSkill(**skill) for skill in settings.get("a2a.skills", [])]
         self.peer_agents = settings.get("a2a.peer_agents", [])
+        self.task_store = A2ATaskStoreConfig(settings)
+        self.queue_manager = A2AQueueManagerConfig(settings)
 
 
 class AuthConfig:
@@ -119,6 +197,28 @@ class ServerConfig:
         self.host = settings.get("server.host", "127.0.0.1")
         self.port = settings.get("server.port", 9000)
         self.url = settings.get("server.url", None)
+
+
+class RedisStorageConfig:
+    """Redis storage configuration."""
+
+    url: str  # Redis connection URL
+    key_prefix: str  # Key prefix for Redis keys
+
+    def __init__(self, settings: LazySettings):
+        self.url = settings.get("sessions.storage.redis.url", "redis://localhost:6379")
+        self.key_prefix = settings.get("sessions.storage.redis.key_prefix", "agent")
+
+
+class SessionStorageConfig:
+    """Session storage configuration."""
+
+    mode: str  # Storage mode (file, redis)
+    redis: RedisStorageConfig  # Redis configuration
+
+    def __init__(self, settings: LazySettings):
+        self.mode = settings.get("sessions.storage.mode", "file")
+        self.redis = RedisStorageConfig(settings)
 
 
 @dataclass
@@ -178,6 +278,7 @@ class AgentConfig:
     server: ServerConfig  # Server settings
     a2a: A2AConfig  # Agent-to-Agent settings
     auth: AuthConfig  # Authentication settings
+    sessions: SessionStorageConfig  # Session storage settings
 
     def __init__(self, settings: LazySettings):
         self.settings = settings
@@ -194,6 +295,7 @@ class AgentConfig:
         self.server = ServerConfig(settings)
         self.a2a = A2AConfig(settings)
         self.auth = AuthConfig(settings)
+        self.sessions = SessionStorageConfig(settings)
 
 
 def createConfig(config_file: str = "agent_config.yaml"):
