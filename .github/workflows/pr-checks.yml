@@ -56,4 +56,6 @@ jobs:
       
       - name: Test Helm chart
         working-directory: helm
-        run: helm template . -f values.example.yaml --set agentDefaults.auth.bearer.token=dummy
+        run: |
+          helm dependency build
+          helm template . -f values.example.yaml --set agentDefaults.auth.bearer.token=dummy
