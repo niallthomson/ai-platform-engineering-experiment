@@ -126,10 +126,40 @@ Convert MCP servers to Python dict format
     {{- $parts = append $parts (printf "headers={%s}" (join ", " $headerParts)) }}
   {{- end }}
   {{- if .authentication }}
-  {{- $parts = append $parts (printf "authentication='%s'" .authentication) }}
-  {{- end }}
-  {{- if .authentication_header }}
-  {{- $parts = append $parts (printf "authentication_header='%s'" .authentication_header) }}
+    {{- $authParts := list }}
+    {{- if .authentication.mode }}
+      {{- $authParts = append $authParts (printf "mode='%s'" .authentication.mode) }}
+    {{- end }}
+    {{- if .authentication.passthrough }}
+      {{- $passthroughParts := list }}
+      {{- if .authentication.passthrough.header }}
+        {{- $passthroughParts = append $passthroughParts (printf "header='%s'" .authentication.passthrough.header) }}
+      {{- end }}
+      {{- if $passthroughParts }}
+        {{- $authParts = append $authParts (printf "passthrough={%s}" (join ", " $passthroughParts)) }}
+      {{- end }}
+    {{- end }}
+    {{- if eq .authentication.mode "sigv4" }}
+      {{- $authParts = append $authParts "sigv4={}" }}
+    {{- end }}
+    {{- if .authentication.static }}
+      {{- $staticParts := list }}
+      {{- if .authentication.static.token }}
+        {{- $staticParts = append $staticParts (printf "token='%s'" .authentication.static.token) }}
+      {{- end }}
+      {{- if .authentication.static.header }}
+        {{- $staticParts = append $staticParts (printf "header='%s'" .authentication.static.header) }}
+      {{- end }}
+      {{- if hasKey .authentication.static "use_bearer" }}
+        {{- $staticParts = append $staticParts (printf "use_bearer=%t" .authentication.static.use_bearer) }}
+      {{- end }}
+      {{- if $staticParts }}
+        {{- $authParts = append $authParts (printf "static={%s}" (join ", " $staticParts)) }}
+      {{- end }}
+    {{- end }}
+    {{- if $authParts }}
+      {{- $parts = append $parts (printf "authentication={%s}" (join ", " $authParts)) }}
+    {{- end }}
   {{- end }}
   {{- if .tools }}
     {{- $toolParts := list }}

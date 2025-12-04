@@ -8,6 +8,7 @@ Objectives:
 
 - Single flexible agent implementation that can be configured for different use-cases
 - MCP for tool access to common platform engineering systems
+- Various authentication modes for downstream MCP servers including static tokens, pass-through and SigV4
 - A2A for multi-agent architecture
 - Additional MCP endpoint for client integration
 - OIDC or shared key authentication with identity passed between agents

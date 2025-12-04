@@ -2,7 +2,6 @@ import logging
 from typing import List, Any
 from default_agent.strands.agent_registry import A2AAgentRegistry
 from default_agent.model_factory import create_model
-from mcp.client.streamable_http import streamablehttp_client
 from strands import Agent, ToolContext, tool
 from strands.tools.mcp import MCPClient
 from strands.types.tools import AgentTool
@@ -12,6 +11,8 @@ from strands.session.file_session_manager import FileSessionManager
 from .config import AgentConfig
 from .a2a.executor import StrandsAgentInstance
 from .strands.forgiving_tool_provider import ForgivingToolProvider
+from .mcp_auth import create_auth
+from mcp.client.streamable_http import streamablehttp_client
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +61,7 @@ def build_agent(
     for server in config.mcp_servers:
         logger.debug(f"Configuring MCP server: {server.name} -> {server.url}")
 
-        additional_headers = {}
-
-        if server.authentication == "passthrough" and authorization_header is not None:
-            if server.authentication_header is None:
-                additional_headers["Authorization"] = authorization_header
-            else:
-                additional_headers[server.authentication_header] = token
-
-        url = server.url
-        headers = server.headers | additional_headers
+        auth = create_auth(server, authorization_header)
 
         def allowed_tools(
             tool: AgentTool,
@@ -99,9 +91,10 @@ def build_agent(
             return is_rejected
 
         mcp_client = MCPClient(
-            lambda url=url, headers=headers: streamablehttp_client(
+            lambda url=server.url, headers=server.headers, auth=auth: streamablehttp_client(
                 url=url,
                 headers=headers,
+                auth=auth,
             ),
             tool_filters={"allowed": [allowed_tools], "rejected": [rejected_tools]},
             prefix=server.tools.prefix,

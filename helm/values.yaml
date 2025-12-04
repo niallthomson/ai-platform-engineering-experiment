@@ -178,7 +178,16 @@ agents: {}
   #       id: "example-mcp"
   #       path: "/mcp"  # Optional path to append to URL
   #       headers:
-  #         Authorization: "Bearer token"
+  #         X-Custom-Header: "value"
+  #       authentication:
+  #         mode: passthrough  # or sigv4, static, none
+  #         passthrough:
+  #           header: "X-Custom-Auth"  # Optional, uses Authorization if not specified
+  #         # sigv4: {}  # Uses server URL to auto-detect service and region
+  #         # static:
+  #         #   token: "my-token"
+  #         #   header: "X-API-Key"
+  #         #   use_bearer: false
   #       tools:
   #         allowed: []  # List of allowed tool names
   #         rejected: []  # List of rejected tool names
@@ -186,8 +195,12 @@ agents: {}
   #     # Or use url for external MCP servers
   #     - name: "External MCP"
   #       url: "https://mcp-server.example.com"
-  #       headers:
-  #         Authorization: "Bearer token"
+  #       authentication:
+  #         mode: static
+  #         static:
+  #           token: "my-token"
+  #           header: "Authorization"
+  #           use_bearer: true
   #       tools:
   #         allowed: []
   #         rejected: []

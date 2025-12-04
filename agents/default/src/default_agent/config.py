@@ -244,16 +244,51 @@ class MCPServerTools:
         self.prefix = settings.get("prefix", None)
 
 
+class MCPServerSigV4Auth:
+    """SigV4 authentication configuration (uses server URL for endpoint)."""
+    
+    def __init__(self, settings: Box):
+        pass  # No configuration needed, uses server URL
+
+
+class MCPServerStaticAuth:
+    token: str  # Static token value
+    header: str  # Header name
+    use_bearer: bool  # Whether to prefix with "Bearer "
+
+    def __init__(self, settings: Box):
+        self.token = settings.get("token", "")
+        self.header = settings.get("header", "Authorization")
+        self.use_bearer = settings.get("use_bearer", True)
+
+
+class MCPServerPassthroughAuth:
+    header: str | None  # Custom header name (uses Authorization if not specified)
+
+    def __init__(self, settings: Box):
+        self.header = settings.get("header", None)
+
+
+class MCPServerAuthConfig:
+    mode: str  # Authentication mode (none, passthrough, sigv4, static)
+    passthrough: MCPServerPassthroughAuth  # Passthrough auth config
+    sigv4: MCPServerSigV4Auth  # SigV4 auth config
+    static: MCPServerStaticAuth  # Static token auth config
+
+    def __init__(self, settings: Box):
+        self.mode = settings.get("mode", "none")
+        self.passthrough = MCPServerPassthroughAuth(settings.get("passthrough", Box()))
+        self.sigv4 = MCPServerSigV4Auth(settings.get("sigv4", Box()))
+        self.static = MCPServerStaticAuth(settings.get("static", Box()))
+
+
 class MCPServer:
     name: str  # MCP server name
     url: str  # MCP server URL
     timeout: int = 30  # Request timeout in seconds
     env: Dict[str, str] = None  # Environment variables
     headers: Dict[str, str] = None  # HTTP headers
-    authentication: str = "none"  # Authentication type (none, passthrough)
-    authentication_header: str | None = (
-        None  # Authentication header name (uses Authorization Bearer header if not specified)
-    )
+    authentication: MCPServerAuthConfig  # Authentication configuration
     tools: MCPServerTools = None  # Tool filtering and prefixing
 
     def __init__(self, settings: Box):
@@ -262,8 +297,7 @@ class MCPServer:
         self.timeout = settings.get("timeout", 30)
         self.env = settings.get("env", {})
         self.headers = settings.get("headers", {})
-        self.authentication = settings.get("authentication", "none")
-        self.authentication_header = settings.get("authentication_header", None)
+        self.authentication = MCPServerAuthConfig(settings.get("authentication", Box()))
         self.tools = MCPServerTools(settings.get("tools", Box()))
 
 
